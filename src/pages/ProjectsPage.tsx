@@ -8,6 +8,7 @@ import {
   FilterOutlined,
   SortAscendingOutlined,
 } from "@ant-design/icons";
+import "../styles/projects.css";
 import { useNavigate } from "react-router-dom";
 
 const { Text } = Typography;
