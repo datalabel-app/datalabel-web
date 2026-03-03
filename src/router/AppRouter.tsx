@@ -6,6 +6,15 @@ const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
+        <Route
+          path="/login"
+          element={!isAuthenticated ? <LoginPage /> : <Navigate to="/home" />}
+        />
+
+        <Route
+          path="/home"
+          element={isAuthenticated ? <HomePage /> : <Navigate to="/login" />}
+        />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>
