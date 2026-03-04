@@ -4,6 +4,8 @@ import LoginPage from "../pages/LoginPage";
 import HomePage from "../pages/HomePage";
 import HomeLayout from "../layout/HomeLayout";
 import ProjectsPage from "../pages/ProjectsPage";
+import ProjectDetailPage from "../pages/ProjectDetailPage";
+
 import AnnotationPage from "../pages/AnnotationPage";
 import TasksPage from "../pages/TasksPage";
 
@@ -32,6 +34,10 @@ const AppRouter: React.FC = () => {
           }
         />
         <Route
+          path="/projects/:id"
+          element={
+            <HomeLayout>
+              <ProjectDetailPage />
           path="/tasks"
           element={
             <HomeLayout>

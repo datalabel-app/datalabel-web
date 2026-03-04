@@ -24,7 +24,7 @@ const mockProjects: Project[] = [
   {
     id: 1,
     name: "sssss",
-    author: "hai43",
+    author: "the_an",
     updatedAt: "2 months ago",
   },
 ];
