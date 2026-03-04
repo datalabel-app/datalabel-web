@@ -4,6 +4,8 @@ import LoginPage from "../pages/LoginPage";
 import HomePage from "../pages/HomePage";
 import HomeLayout from "../layout/HomeLayout";
 import ProjectsPage from "../pages/ProjectsPage";
+import ProjectDetailPage from "../pages/ProjectDetailPage";
+
 
 const AppRouter: React.FC = () => {
   const isAuthenticated = localStorage.getItem("token");
@@ -26,6 +28,14 @@ const AppRouter: React.FC = () => {
           element={
             <HomeLayout>
               <ProjectsPage />
+            </HomeLayout>
+          }
+        />
+        <Route
+          path="/projects/:id"
+          element={
+            <HomeLayout>
+              <ProjectDetailPage />
             </HomeLayout>
           }
         />
