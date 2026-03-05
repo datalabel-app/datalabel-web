@@ -5,7 +5,6 @@ import HomePage from "../pages/HomePage";
 import HomeLayout from "../layout/HomeLayout";
 import ProjectsPage from "../pages/ProjectsPage";
 import ProjectDetailPage from "../pages/ProjectDetailPage";
-
 import AnnotationPage from "../pages/AnnotationPage";
 import TasksPage from "../pages/TasksPage";
 
@@ -29,7 +28,7 @@ const AppRouter: React.FC = () => {
           path="/projects"
           element={
             <HomeLayout>
-              <ProjectsPage />
+              <ProjectsPage/>
             </HomeLayout>
           }
         />
@@ -37,11 +36,7 @@ const AppRouter: React.FC = () => {
           path="/projects/:id"
           element={
             <HomeLayout>
-              <ProjectDetailPage />
-          path="/tasks"
-          element={
-            <HomeLayout>
-              <TasksPage />
+              <ProjectDetailPage/>
             </HomeLayout>
           }
         />
@@ -50,6 +45,14 @@ const AppRouter: React.FC = () => {
           element={
             <HomeLayout>
               <AnnotationPage />
+            </HomeLayout>
+          }
+        />
+        <Route
+          path="/tasks"
+          element={
+            <HomeLayout>
+              <TasksPage />
             </HomeLayout>
           }
         />
