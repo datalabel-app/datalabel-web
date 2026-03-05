@@ -66,7 +66,7 @@ const TasksPage: React.FC = () => {
                   Created by the_an on January 14th 2026
                 </Text>
                 <br />
-                <Text type="secondary">Last updated 2 months ago</Text>
+                <Text type="secondary">Last updated 1 week ago</Text>
               </div>
             </Space>
           </Col>
