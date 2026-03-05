@@ -90,7 +90,7 @@ const AppHeader: React.FC = () => {
         >
           <Space className="user-dropdown">
             <Avatar size="small" icon={<UserOutlined />} />
-            <span className="username">hai43</span>
+            <span className="username">User_1</span>
           </Space>
         </Dropdown>
       </div>

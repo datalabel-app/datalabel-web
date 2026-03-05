@@ -63,7 +63,7 @@ const TasksPage: React.FC = () => {
                   #1931369: sss
                 </Title>
                 <Text type="secondary">
-                  Created by hai43 on January 14th 2026
+                  Created by the_an on January 14th 2026
                 </Text>
                 <br />
                 <Text type="secondary">Last updated 2 months ago</Text>
