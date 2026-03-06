@@ -9,6 +9,8 @@ import ProjectDetailPage from "../pages/ProjectDetailPage";
 import AnnotationPage from "../pages/AnnotationPage";
 import TasksPage from "../pages/TasksPage";
 
+import PrivateRoute from "./PrivateRoute";
+
 const AppRouter: React.FC = () => {
   const isAuthenticated = localStorage.getItem("token");
 
@@ -24,9 +26,11 @@ const AppRouter: React.FC = () => {
         <Route
           path="/"
           element={
+            <PrivateRoute>
               <HomeLayout>
                 <HomePage />
               </HomeLayout>
+            </PrivateRoute>
           }
         />
 
