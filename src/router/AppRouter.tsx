@@ -1,5 +1,6 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
 import LoginPage from "../pages/LoginPage";
 import HomePage from "../pages/HomePage";
 import HomeLayout from "../layout/HomeLayout";
@@ -7,6 +8,8 @@ import ProjectsPage from "../pages/ProjectsPage";
 import ProjectDetailPage from "../pages/ProjectDetailPage";
 import AnnotationPage from "../pages/AnnotationPage";
 import TasksPage from "../pages/TasksPage";
+
+import PrivateRoute from "./PrivateRoute";
 
 const AppRouter: React.FC = () => {
   const isAuthenticated = localStorage.getItem("token");
@@ -19,9 +22,16 @@ const AppRouter: React.FC = () => {
           element={!isAuthenticated ? <LoginPage /> : <Navigate to="/home" />}
         />
 
+        {/* HOME */}
         <Route
-          path="/home"
-          element={isAuthenticated ? <HomePage /> : <Navigate to="/login" />}
+          path="/"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <HomePage />
+              </HomeLayout>
+            </PrivateRoute>
+          }
         />
 
         <Route
