@@ -13,6 +13,8 @@ import AnnotationPage from "../pages/AnnotationPage";
 
 import PrivateRoute from "./PrivateRoute";
 import UserManagementPage from "../pages/UserManagementPage";
+import CreateDatasetPage from "../pages/CreateDatasetPage";
+import DatasetDetailPage from "../pages/DatasetDetailPage";
 
 const AppRouter: React.FC = () => {
   const token = localStorage.getItem("token");
@@ -80,6 +82,28 @@ const AppRouter: React.FC = () => {
             </PrivateRoute>
           }
         />
+        {/* DATASET */}
+        <Route
+          path="/projects/:id/dataset"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <CreateDatasetPage />
+              </HomeLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/datasets/:datasetId"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <DatasetDetailPage />
+              </HomeLayout>
+            </PrivateRoute>
+          }
+        />
+        
         {/* TASKS */}
         <Route
           path="/tasks"

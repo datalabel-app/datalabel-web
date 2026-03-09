@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Form,
   Input,
@@ -11,17 +11,84 @@ import {
   Typography,
   Row,
   Col,
+  message,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { ProjectService } from "../services/project.service";
+import { LabelService } from "../services/label.service";
+import { useNavigate } from "react-router-dom";
 
 const { Title } = Typography;
 const { Panel } = Collapse;
 
+interface LabelItem {
+  labelName: string;
+  labelType: string;
+  description: string;
+}
+
 const CreateProjectPage: React.FC = () => {
   const [form] = Form.useForm();
+  const [labels, setLabels] = useState<LabelItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const addLabel = () => {
+    setLabels([
+      ...labels,
+      {
+        labelName: "",
+        labelType: "box",
+        description: "",
+      },
+    ]);
+  };
 
-  const onFinish = (values: any) => {
-    console.log("Project Data:", values);
+  const updateLabel = (index: number, key: keyof LabelItem, value: string) => {
+    const newLabels = [...labels];
+    newLabels[index][key] = value;
+    setLabels(newLabels);
+  };
+
+  const removeLabel = (index: number) => {
+    const newLabels = [...labels];
+    newLabels.splice(index, 1);
+    setLabels(newLabels);
+  };
+
+  const onFinish = async (values: any) => {
+    try {
+      setLoading(true);
+
+      const projectPayload = {
+        projectName: values.name,
+        description: values.description || "",
+      };
+
+      const projectRes = await ProjectService.create(projectPayload);
+
+      const projectId = projectRes.projectId || projectRes.id;
+
+      if (labels.length > 0) {
+        await Promise.all(
+          labels.map((label) =>
+            LabelService.create({
+              projectId: projectId,
+              labelName: label.labelName,
+              labelType: label.labelType,
+              description: label.description,
+            }),
+          ),
+        );
+      }
+
+      message.success("Project created successfully");
+
+      navigate(`/projects/${projectId}/dataset`);
+    } catch (error) {
+      message.error("Create project failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,18 +104,20 @@ const CreateProjectPage: React.FC = () => {
           Create a new project
         </Title>
 
-        <Card>
+        <Card loading={loading}>
           <Form layout="vertical" form={form} onFinish={onFinish}>
-            {/* NAME */}
             <Form.Item
-              label="Name"
+              label="Project Name"
               name="name"
               rules={[{ required: true, message: "Please enter project name" }]}
             >
               <Input placeholder="Enter project name" />
             </Form.Item>
 
-            {/* LABELS */}
+            <Form.Item label="Description" name="description">
+              <Input.TextArea placeholder="Project description" rows={3} />
+            </Form.Item>
+
             <Form.Item label="Labels">
               <Tabs
                 defaultActiveKey="raw"
@@ -57,10 +126,75 @@ const CreateProjectPage: React.FC = () => {
                     key: "raw",
                     label: "Raw",
                     children: (
-                      <Space>
-                        <Button icon={<PlusOutlined />}>Add label</Button>
-                        <Button icon={<PlusOutlined />}>Setup skeleton</Button>
-                        <Button icon={<PlusOutlined />}>From model</Button>
+                      <Space direction="vertical" style={{ width: "100%" }}>
+                        <Button
+                          icon={<PlusOutlined />}
+                          onClick={addLabel}
+                          type="dashed"
+                        >
+                          Add label
+                        </Button>
+
+                        {labels.map((label, index) => (
+                          <Card
+                            key={index}
+                            size="small"
+                            style={{ marginTop: 10 }}
+                          >
+                            <Row gutter={12}>
+                              <Col span={8}>
+                                <Input
+                                  placeholder="Label name"
+                                  value={label.labelName}
+                                  onChange={(e) =>
+                                    updateLabel(
+                                      index,
+                                      "labelName",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </Col>
+
+                              <Col span={6}>
+                                <Select
+                                  style={{ width: "100%" }}
+                                  value={label.labelType}
+                                  options={[
+                                    { label: "Box", value: "box" },
+                                    { label: "Polygon", value: "polygon" },
+                                    { label: "Point", value: "point" },
+                                  ]}
+                                  onChange={(value) =>
+                                    updateLabel(index, "labelType", value)
+                                  }
+                                />
+                              </Col>
+
+                              <Col span={8}>
+                                <Input
+                                  placeholder="Description"
+                                  value={label.description}
+                                  onChange={(e) =>
+                                    updateLabel(
+                                      index,
+                                      "description",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </Col>
+
+                              <Col span={2}>
+                                <Button
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  onClick={() => removeLabel(index)}
+                                />
+                              </Col>
+                            </Row>
+                          </Card>
+                        ))}
                       </Space>
                     ),
                   },
@@ -77,8 +211,7 @@ const CreateProjectPage: React.FC = () => {
               />
             </Form.Item>
 
-            {/* ADVANCED CONFIG */}
-            <Collapse defaultActiveKey={[]}>
+            <Collapse>
               <Panel header="Advanced configuration" key="1">
                 <Form.Item label="Issue tracker" name="issueTracker">
                   <Input placeholder="Attach issue tracker URL" />
@@ -118,7 +251,6 @@ const CreateProjectPage: React.FC = () => {
               </Panel>
             </Collapse>
 
-            {/* BUTTONS */}
             <div
               style={{
                 display: "flex",
@@ -127,10 +259,12 @@ const CreateProjectPage: React.FC = () => {
               }}
             >
               <Space>
-                <Button type="primary" htmlType="submit">
-                  Submit & Open
-                </Button>
-                <Button type="primary" htmlType="submit">
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={loading}
+                  disabled={loading}
+                >
                   Submit & Continue
                 </Button>
               </Space>
