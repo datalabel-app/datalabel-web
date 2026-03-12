@@ -1,14 +1,39 @@
 import React, { useState } from "react";
-import { Card, Form, Input, Button, message } from "antd";
+import {
+  Card,
+  Form,
+  Input,
+  Button,
+  message,
+  Space,
+  Typography,
+  Divider,
+} from "antd";
 import { useNavigate, useParams } from "react-router-dom";
+
 import DatasetUploader from "../components/DatasetUploader";
+
 import { DatasetService } from "../services/dataset.service";
-import { DataitemService } from "../services/dataitem.service";
+import { DatasetRoundService } from "../services/datasetround.service";
+import { LabelService } from "../services/label.service";
 import { UploadService } from "../services/upload.service";
+import { DataItemService } from "../services/dataitem.service";
+
+const { Title } = Typography;
 
 interface UploadedImage {
   url: string;
   publicId: string;
+}
+
+interface LabelItem {
+  labelName: string;
+}
+
+interface RoundItem {
+  roundNumber: number;
+  description?: string;
+  labels: LabelItem[];
 }
 
 const CreateDatasetPage: React.FC = () => {
@@ -16,7 +41,59 @@ const CreateDatasetPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [files, setFiles] = useState<File[]>([]);
+  const [rounds, setRounds] = useState<RoundItem[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // ADD ROUND
+  const addRound = () => {
+    setRounds([
+      ...rounds,
+      {
+        roundNumber: rounds.length + 1,
+        description: "",
+        labels: [],
+      },
+    ]);
+  };
+
+  // REMOVE ROUND
+  const removeRound = (index: number) => {
+    const newRounds = [...rounds];
+    newRounds.splice(index, 1);
+    setRounds(newRounds);
+  };
+
+  // UPDATE ROUND DESCRIPTION
+  const updateRoundDescription = (index: number, value: string) => {
+    const newRounds = [...rounds];
+    newRounds[index].description = value;
+    setRounds(newRounds);
+  };
+
+  // ADD LABEL
+  const addLabel = (roundIndex: number) => {
+    const newRounds = [...rounds];
+    newRounds[roundIndex].labels.push({ labelName: "" });
+    setRounds(newRounds);
+  };
+
+  // UPDATE LABEL
+  const updateLabel = (
+    roundIndex: number,
+    labelIndex: number,
+    value: string,
+  ) => {
+    const newRounds = [...rounds];
+    newRounds[roundIndex].labels[labelIndex].labelName = value;
+    setRounds(newRounds);
+  };
+
+  // REMOVE LABEL
+  const removeLabel = (roundIndex: number, labelIndex: number) => {
+    const newRounds = [...rounds];
+    newRounds[roundIndex].labels.splice(labelIndex, 1);
+    setRounds(newRounds);
+  };
 
   const onFinish = async (values: any) => {
     try {
@@ -27,24 +104,46 @@ const CreateDatasetPage: React.FC = () => {
 
       setLoading(true);
 
-      // Create dataset
       const datasetRes = await DatasetService.create({
         projectId: Number(id),
         datasetName: values.datasetName,
-        status: "active",
+        status: "Active",
       });
 
-      const datasetId = datasetRes.datasetId || datasetRes.id;
+      const datasetId = datasetRes.datasetId;
 
-      // Upload images
+      // 2 CREATE ROUNDS + LABELS
+      for (const round of rounds) {
+        const roundRes = await DatasetRoundService.create({
+          datasetId: datasetId,
+          roundNumber: round.roundNumber,
+          description: round.description,
+          status: "Active",
+        });
+
+        const roundId = roundRes.roundId;
+
+        if (round.labels.length > 0) {
+          await Promise.all(
+            round.labels.map((label) =>
+              LabelService.create({
+                roundId: roundId,
+                labelName: label.labelName,
+              }),
+            ),
+          );
+        }
+      }
+
+      // 3 UPLOAD IMAGES
       const uploadRes = await UploadService.uploadImages(files);
 
       const images: UploadedImage[] = uploadRes.urls || uploadRes;
 
-      // Create dataitems
+      // 4 CREATE DATAITEM
       await Promise.all(
         images.map((img) =>
-          DataitemService.create({
+          DataItemService.create({
             datasetId: datasetId,
             fileUrl: img.url,
             status: 0,
@@ -71,12 +170,9 @@ const CreateDatasetPage: React.FC = () => {
         justifyContent: "center",
       }}
     >
-      <Card
-        title="Create Dataset"
-        style={{
-          width: 700,
-        }}
-      >
+      <Card style={{ width: 800 }}>
+        <Title level={3}>Create Dataset</Title>
+
         <Form layout="vertical" onFinish={onFinish}>
           <Form.Item
             label="Dataset Name"
@@ -86,16 +182,67 @@ const CreateDatasetPage: React.FC = () => {
             <Input placeholder="Dataset name" />
           </Form.Item>
 
-          <Form.Item label="Upload Images">
+          <Divider>Rounds & Labels</Divider>
+
+          <Space direction="vertical" style={{ width: "100%" }}>
+            <Button onClick={addRound}>Add Round</Button>
+
+            {rounds.map((round, roundIndex) => (
+              <Card
+                key={roundIndex}
+                size="small"
+                title={`Round ${round.roundNumber}`}
+                extra={
+                  <Button danger onClick={() => removeRound(roundIndex)}>
+                    Delete Round
+                  </Button>
+                }
+              >
+                <Form.Item label="Description">
+                  <Input
+                    placeholder="Round description"
+                    value={round.description}
+                    onChange={(e) =>
+                      updateRoundDescription(roundIndex, e.target.value)
+                    }
+                  />
+                </Form.Item>
+
+                <Space direction="vertical" style={{ width: "100%" }}>
+                  <Button onClick={() => addLabel(roundIndex)}>
+                    Add Label
+                  </Button>
+
+                  {round.labels.map((label, labelIndex) => (
+                    <Space key={labelIndex} style={{ width: "100%" }}>
+                      <Input
+                        placeholder="Label name"
+                        value={label.labelName}
+                        onChange={(e) =>
+                          updateLabel(roundIndex, labelIndex, e.target.value)
+                        }
+                      />
+
+                      <Button
+                        danger
+                        onClick={() => removeLabel(roundIndex, labelIndex)}
+                      >
+                        Delete
+                      </Button>
+                    </Space>
+                  ))}
+                </Space>
+              </Card>
+            ))}
+          </Space>
+
+          <Divider>Upload Images</Divider>
+
+          <Form.Item>
             <DatasetUploader files={files} setFiles={setFiles} />
           </Form.Item>
 
-          <Button
-            type="primary"
-            htmlType="submit"
-            loading={loading}
-            disabled={loading}
-          >
+          <Button type="primary" htmlType="submit" loading={loading}>
             Create Dataset
           </Button>
         </Form>
