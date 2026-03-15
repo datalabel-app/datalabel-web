@@ -17,14 +17,14 @@ const { Title } = Typography;
 
 const ProfilePage: React.FC = () => {
   const [form] = Form.useForm();
-
+  const userEmail = localStorage.getItem("user");
   const onFinish = (values: any) => {
     console.log("Profile updated:", values);
   };
 
   return (
     <div style={{ padding: "40px 80px" }}>
-      <Title level={2}>Welcome, hoangnguyen</Title>
+      <Title level={2}>Welcome, {userEmail}</Title>
 
       <Layout style={{ background: "transparent", marginTop: 20 }}>
         {/* LEFT MENU */}
@@ -62,10 +62,10 @@ const ProfilePage: React.FC = () => {
               form={form}
               onFinish={onFinish}
               initialValues={{
-                firstName: "hoang",
-                lastName: "nguyen",
-                email: "hoangnguyen@gmail.com",
-                username: "hoangnguyen",
+                firstName: "abc",
+                lastName: "Khang",
+                email: "khang73@gmail.com",
+                username: "khang",
               }}
             >
               <Row gutter={16}>

@@ -1,23 +1,43 @@
-import React from "react";
-import { Button, Input, Typography, Form } from "antd";
+import React, { useState } from "react";
+import { Button, Input, Typography, Form, message } from "antd";
 import { GoogleOutlined, LockOutlined, UserOutlined } from "@ant-design/icons";
 import "../styles/login.css";
 import { useNavigate } from "react-router-dom";
+import { AuthService } from "../services/auth.service";
 
 const { Title } = Typography;
 
 interface LoginFormValues {
-  username: string;
+  email: string;
   password: string;
 }
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const onFinish = (values: LoginFormValues) => {
-    console.log("Form values:", values);
-    localStorage.setItem("token", "fake-jwt-token");
+  const [loading, setLoading] = useState(false);
 
-    navigate("/home");
+  const onFinish = async (values: LoginFormValues) => {
+    try {
+      setLoading(true);
+
+      const res = await AuthService.login(values);
+
+      localStorage.setItem("token", res.token);
+      localStorage.setItem("role", res.role);
+      localStorage.setItem("user", res.email);
+      message.success("Login success");
+      if (Number(res.role) === 1) {
+        navigate("/user-manage");
+      } else {
+        navigate("/");
+      }
+    } catch (error: any) {
+      message.error(
+        error?.response?.data?.message || "Login failed. Please try again",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -36,12 +56,12 @@ const LoginPage: React.FC = () => {
 
           <Form<LoginFormValues> layout="vertical" onFinish={onFinish}>
             <Form.Item
-              name="username"
-              rules={[{ required: true, message: "Please enter username!" }]}
+              name="email"
+              rules={[{ required: true, message: "Please enter email!" }]}
             >
               <Input
                 size="large"
-                placeholder="Email or username"
+                placeholder="Email"
                 prefix={<UserOutlined />}
               />
             </Form.Item>
@@ -58,20 +78,26 @@ const LoginPage: React.FC = () => {
             </Form.Item>
 
             <Form.Item>
-              <Button type="primary" size="large" block htmlType="submit">
+              <Button
+                type="primary"
+                size="large"
+                block
+                htmlType="submit"
+                loading={loading}
+              >
                 Sign in
               </Button>
             </Form.Item>
           </Form>
 
-          <Button
+          {/* <Button
             size="large"
             block
             className="google-btn"
             icon={<GoogleOutlined />}
           >
             Continue with Google
-          </Button>
+          </Button> */}
         </div>
       </div>
     </div>
