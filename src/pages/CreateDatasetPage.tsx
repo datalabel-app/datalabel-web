@@ -8,6 +8,7 @@ import {
   Space,
   Typography,
   Divider,
+  Select,
 } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -20,6 +21,7 @@ import { UploadService } from "../services/upload.service";
 import { DataItemService } from "../services/dataitem.service";
 
 const { Title } = Typography;
+const { Option } = Select;
 
 interface UploadedImage {
   url: string;
@@ -33,6 +35,7 @@ interface LabelItem {
 interface RoundItem {
   roundNumber: number;
   description?: string;
+  shapeType: number;
   labels: LabelItem[];
 }
 
@@ -51,6 +54,7 @@ const CreateDatasetPage: React.FC = () => {
       {
         roundNumber: rounds.length + 1,
         description: "",
+        shapeType: 0,
         labels: [],
       },
     ]);
@@ -67,6 +71,13 @@ const CreateDatasetPage: React.FC = () => {
   const updateRoundDescription = (index: number, value: string) => {
     const newRounds = [...rounds];
     newRounds[index].description = value;
+    setRounds(newRounds);
+  };
+
+  // UPDATE SHAPETYPE
+  const updateShapeType = (index: number, value: number) => {
+    const newRounds = [...rounds];
+    newRounds[index].shapeType = value;
     setRounds(newRounds);
   };
 
@@ -104,6 +115,7 @@ const CreateDatasetPage: React.FC = () => {
 
       setLoading(true);
 
+      // 1 CREATE DATASET
       const datasetRes = await DatasetService.create({
         projectId: Number(id),
         datasetName: values.datasetName,
@@ -118,6 +130,7 @@ const CreateDatasetPage: React.FC = () => {
           datasetId: datasetId,
           roundNumber: round.roundNumber,
           description: round.description,
+          shapeType: round.shapeType,
           status: "Active",
         });
 
@@ -206,6 +219,16 @@ const CreateDatasetPage: React.FC = () => {
                       updateRoundDescription(roundIndex, e.target.value)
                     }
                   />
+                </Form.Item>
+
+                <Form.Item label="Shape Type">
+                  <Select
+                    value={round.shapeType}
+                    onChange={(value) => updateShapeType(roundIndex, value)}
+                  >
+                    <Option value={0}>Bounding Box</Option>
+                    <Option value={1}>Classification</Option>
+                  </Select>
                 </Form.Item>
 
                 <Space direction="vertical" style={{ width: "100%" }}>
