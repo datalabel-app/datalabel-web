@@ -4,9 +4,6 @@ import {
   Typography,
   Button,
   Space,
-  Tabs,
-  Tag,
-  Select,
   Row,
   Col,
   Input,
@@ -24,8 +21,6 @@ import {
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import { ProjectService } from "../services/project.service";
-import { LabelService } from "../services/label.service";
-import { DatasetService } from "../services/dataset.service";
 
 const { Title, Text } = Typography;
 
@@ -33,13 +28,6 @@ interface Project {
   projectId: number;
   projectName: string;
   description: string;
-}
-
-interface Label {
-  labelId: number;
-  labelName: string;
-  labelType: string;
-  description?: string;
 }
 
 interface Dataset {
@@ -53,18 +41,11 @@ const ProjectDetailPage: React.FC = () => {
   const { id } = useParams();
 
   const [project, setProject] = useState<Project | null>(null);
-  const [labels, setLabels] = useState<Label[]>([]);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
-
   const [loading, setLoading] = useState(false);
 
   const [projectModal, setProjectModal] = useState(false);
-  const [labelModal, setLabelModal] = useState(false);
-
-  const [editingLabel, setEditingLabel] = useState<Label | null>(null);
-
   const [projectForm] = Form.useForm();
-  const [labelForm] = Form.useForm();
 
   const [submitLoading, setSubmitLoading] = useState(false);
 
@@ -72,15 +53,11 @@ const ProjectDetailPage: React.FC = () => {
     try {
       setLoading(true);
 
-      const projectRes = await ProjectService.getById(id);
-      setProject(projectRes);
+      const res = await ProjectService.getById(Number(id));
 
-      const labelRes = await LabelService.getByProjectId(id);
-      setLabels(labelRes || []);
-
-      const datasetRes = await DatasetService.getDatasetByProject(id);
-      setDatasets(datasetRes || []);
-    } catch (error) {
+      setProject(res);
+      setDatasets(res.datasets || []);
+    } catch {
       message.error("Failed to load project");
     } finally {
       setLoading(false);
@@ -109,45 +86,6 @@ const ProjectDetailPage: React.FC = () => {
     }
   };
 
-  const openAddLabel = () => {
-    setEditingLabel(null);
-    labelForm.resetFields();
-    setLabelModal(true);
-  };
-
-  const openEditLabel = (label: Label) => {
-    setEditingLabel(label);
-
-    labelForm.setFieldsValue(label);
-
-    setLabelModal(true);
-  };
-
-  const handleSaveLabel = async (values: any) => {
-    try {
-      setSubmitLoading(true);
-
-      if (editingLabel) {
-        await LabelService.update(editingLabel.labelId, values);
-        message.success("Label updated");
-      } else {
-        await LabelService.create({
-          ...values,
-          projectId: id,
-        });
-        message.success("Label created");
-      }
-
-      setLabelModal(false);
-
-      fetchProject();
-    } catch {
-      message.error("Save label failed");
-    } finally {
-      setSubmitLoading(false);
-    }
-  };
-
   if (loading || !project) {
     return (
       <div style={{ textAlign: "center", marginTop: 120 }}>
@@ -158,6 +96,8 @@ const ProjectDetailPage: React.FC = () => {
 
   return (
     <div style={{ padding: 24 }}>
+      {/* BACK BUTTON */}
+
       <Button
         type="link"
         icon={<ArrowLeftOutlined />}
@@ -185,76 +125,18 @@ const ProjectDetailPage: React.FC = () => {
             />
           </Space>
 
-          <Button>Actions</Button>
+          <Button type="primary">Actions</Button>
         </Row>
 
         <Text type="secondary">Project #{project.projectId}</Text>
 
         <Row justify="space-between" style={{ marginTop: 16 }}>
-          <Col>
+          <Col span={16}>
             <Text strong>Project description</Text>
 
             <div style={{ marginTop: 8 }}>{project.description}</div>
           </Col>
-
-          <Col>
-            <Space>
-              <Text>Assigned to</Text>
-
-              <Select
-                placeholder="Select user"
-                style={{ width: 200 }}
-                options={[
-                  { label: "hai43", value: "hai43" },
-                  { label: "admin", value: "admin" },
-                ]}
-              />
-            </Space>
-          </Col>
         </Row>
-
-        {/* LABELS */}
-
-        <div style={{ marginTop: 24 }}>
-          <Tabs
-            defaultActiveKey="raw"
-            items={[
-              {
-                key: "raw",
-                label: "Raw",
-                children: (
-                  <>
-                    <Space wrap style={{ marginBottom: 16 }}>
-                      <Button
-                        size="small"
-                        icon={<PlusOutlined />}
-                        onClick={openAddLabel}
-                      >
-                        Add label
-                      </Button>
-
-                      {labels.map((label) => (
-                        <Tag
-                          key={label.labelId}
-                          color="green"
-                          style={{ cursor: "pointer" }}
-                          onClick={() => openEditLabel(label)}
-                        >
-                          {label.labelName} <EditOutlined />
-                        </Tag>
-                      ))}
-                    </Space>
-                  </>
-                ),
-              },
-              {
-                key: "constructor",
-                label: "Constructor",
-                children: <div>Constructor config here...</div>,
-              },
-            ]}
-          />
-        </div>
       </Card>
 
       {/* DATASET TOOLBAR */}
@@ -272,15 +154,13 @@ const ProjectDetailPage: React.FC = () => {
           </Space>
 
           <Space>
-            <Button>Sort by</Button>
-            <Button>Quick filters</Button>
+            <Button>Sort</Button>
             <Button>Filter</Button>
-            <Button type="link">Clear filters</Button>
 
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => navigate(`/projects/${id}/dataset`)}
+              onClick={() => navigate(`/projects/${id}/dataset/create`)}
             >
               Add Dataset
             </Button>
@@ -296,24 +176,18 @@ const ProjectDetailPage: React.FC = () => {
         ) : (
           <Row gutter={[16, 16]}>
             {datasets.map((dataset) => (
-              <Col
-                span={8}
-                key={dataset.datasetId}
-                onClick={() => navigate(`/datasets/${dataset.datasetId}`)}
-              >
+              <Col span={8} key={dataset.datasetId}>
                 <Card
                   hoverable
                   onClick={() => navigate(`/datasets/${dataset.datasetId}`)}
                 >
-                  <Space direction="vertical">
-                    <Title level={5} style={{ margin: 0 }}>
-                      {dataset.datasetName}
-                    </Title>
+                  <Title level={5}>{dataset.datasetName}</Title>
 
-                    <Text type="secondary">Dataset #{dataset.datasetId}</Text>
+                  <Text type="secondary">Dataset #{dataset.datasetId}</Text>
 
-                    <Tag color="blue">{dataset.status}</Tag>
-                  </Space>
+                  <div style={{ marginTop: 12 }}>
+                    <Text>Status: {dataset.status}</Text>
+                  </div>
                 </Card>
               </Col>
             ))}
@@ -321,21 +195,21 @@ const ProjectDetailPage: React.FC = () => {
         )}
       </div>
 
-      {/* UPDATE PROJECT */}
+      {/* EDIT PROJECT MODAL */}
 
       <Modal
+        title="Edit Project"
         open={projectModal}
-        title="Update Project"
         onCancel={() => setProjectModal(false)}
         footer={null}
       >
         <Form
-          layout="vertical"
           form={projectForm}
+          layout="vertical"
           onFinish={handleUpdateProject}
         >
           <Form.Item
-            label="Project Name"
+            label="Project name"
             name="projectName"
             rules={[{ required: true }]}
           >
@@ -343,7 +217,7 @@ const ProjectDetailPage: React.FC = () => {
           </Form.Item>
 
           <Form.Item label="Description" name="description">
-            <Input.TextArea rows={3} />
+            <Input.TextArea rows={4} />
           </Form.Item>
 
           <Button
@@ -353,52 +227,6 @@ const ProjectDetailPage: React.FC = () => {
             block
           >
             Update
-          </Button>
-        </Form>
-      </Modal>
-
-      {/* LABEL MODAL */}
-
-      <Modal
-        open={labelModal}
-        title={editingLabel ? "Update Label" : "Create Label"}
-        onCancel={() => setLabelModal(false)}
-        footer={null}
-      >
-        <Form layout="vertical" form={labelForm} onFinish={handleSaveLabel}>
-          <Form.Item
-            label="Label Name"
-            name="labelName"
-            rules={[{ required: true }]}
-          >
-            <Input />
-          </Form.Item>
-
-          <Form.Item
-            label="Label Type"
-            name="labelType"
-            rules={[{ required: true }]}
-          >
-            <Select
-              options={[
-                { label: "Bounding Box", value: "bbox" },
-                { label: "Polygon", value: "polygon" },
-                { label: "Classification", value: "classification" },
-              ]}
-            />
-          </Form.Item>
-
-          <Form.Item label="Description" name="description">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-
-          <Button
-            type="primary"
-            htmlType="submit"
-            loading={submitLoading}
-            block
-          >
-            Save Label
           </Button>
         </Form>
       </Modal>

@@ -4,7 +4,6 @@ import {
   Input,
   Button,
   Card,
-  Tabs,
   Space,
   Collapse,
   Select,
@@ -15,7 +14,6 @@ import {
 } from "antd";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import { ProjectService } from "../services/project.service";
-import { LabelService } from "../services/label.service";
 import { useNavigate } from "react-router-dom";
 
 const { Title } = Typography;
@@ -32,6 +30,7 @@ const CreateProjectPage: React.FC = () => {
   const [labels, setLabels] = useState<LabelItem[]>([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
   const addLabel = () => {
     setLabels([
       ...labels,
@@ -59,27 +58,14 @@ const CreateProjectPage: React.FC = () => {
     try {
       setLoading(true);
 
-      const projectPayload = {
+      const payload = {
         projectName: values.name,
         description: values.description || "",
       };
 
-      const projectRes = await ProjectService.create(projectPayload);
+      const res = await ProjectService.create(payload);
 
-      const projectId = projectRes.projectId || projectRes.id;
-
-      if (labels.length > 0) {
-        await Promise.all(
-          labels.map((label) =>
-            LabelService.create({
-              projectId: projectId,
-              labelName: label.labelName,
-              labelType: label.labelType,
-              description: label.description,
-            }),
-          ),
-        );
-      }
+      const projectId = res.projectId || res.id;
 
       message.success("Project created successfully");
 
@@ -118,139 +104,6 @@ const CreateProjectPage: React.FC = () => {
               <Input.TextArea placeholder="Project description" rows={3} />
             </Form.Item>
 
-            <Form.Item label="Labels">
-              <Tabs
-                defaultActiveKey="raw"
-                items={[
-                  {
-                    key: "raw",
-                    label: "Raw",
-                    children: (
-                      <Space direction="vertical" style={{ width: "100%" }}>
-                        <Button
-                          icon={<PlusOutlined />}
-                          onClick={addLabel}
-                          type="dashed"
-                        >
-                          Add label
-                        </Button>
-
-                        {labels.map((label, index) => (
-                          <Card
-                            key={index}
-                            size="small"
-                            style={{ marginTop: 10 }}
-                          >
-                            <Row gutter={12}>
-                              <Col span={8}>
-                                <Input
-                                  placeholder="Label name"
-                                  value={label.labelName}
-                                  onChange={(e) =>
-                                    updateLabel(
-                                      index,
-                                      "labelName",
-                                      e.target.value,
-                                    )
-                                  }
-                                />
-                              </Col>
-
-                              <Col span={6}>
-                                <Select
-                                  style={{ width: "100%" }}
-                                  value={label.labelType}
-                                  options={[
-                                    { label: "Box", value: "box" },
-                                    { label: "Polygon", value: "polygon" },
-                                    { label: "Point", value: "point" },
-                                  ]}
-                                  onChange={(value) =>
-                                    updateLabel(index, "labelType", value)
-                                  }
-                                />
-                              </Col>
-
-                              <Col span={8}>
-                                <Input
-                                  placeholder="Description"
-                                  value={label.description}
-                                  onChange={(e) =>
-                                    updateLabel(
-                                      index,
-                                      "description",
-                                      e.target.value,
-                                    )
-                                  }
-                                />
-                              </Col>
-
-                              <Col span={2}>
-                                <Button
-                                  danger
-                                  icon={<DeleteOutlined />}
-                                  onClick={() => removeLabel(index)}
-                                />
-                              </Col>
-                            </Row>
-                          </Card>
-                        ))}
-                      </Space>
-                    ),
-                  },
-                  {
-                    key: "constructor",
-                    label: "Constructor",
-                    children: (
-                      <div style={{ padding: 10 }}>
-                        Constructor config here...
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            </Form.Item>
-
-            <Collapse>
-              <Panel header="Advanced configuration" key="1">
-                <Form.Item label="Issue tracker" name="issueTracker">
-                  <Input placeholder="Attach issue tracker URL" />
-                </Form.Item>
-
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                      label="Source storage"
-                      name="sourceStorage"
-                      initialValue="local"
-                    >
-                      <Select
-                        options={[
-                          { label: "Local", value: "local" },
-                          { label: "Cloud", value: "cloud" },
-                        ]}
-                      />
-                    </Form.Item>
-                  </Col>
-
-                  <Col span={12}>
-                    <Form.Item
-                      label="Target storage"
-                      name="targetStorage"
-                      initialValue="local"
-                    >
-                      <Select
-                        options={[
-                          { label: "Local", value: "local" },
-                          { label: "Cloud", value: "cloud" },
-                        ]}
-                      />
-                    </Form.Item>
-                  </Col>
-                </Row>
-              </Panel>
-            </Collapse>
-
             <div
               style={{
                 display: "flex",
@@ -258,16 +111,9 @@ const CreateProjectPage: React.FC = () => {
                 marginTop: 30,
               }}
             >
-              <Space>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={loading}
-                  disabled={loading}
-                >
-                  Submit & Continue
-                </Button>
-              </Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                Submit & Continue
+              </Button>
             </div>
           </Form>
         </Card>
