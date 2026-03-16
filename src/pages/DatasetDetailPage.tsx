@@ -13,7 +13,7 @@ import {
 } from "antd";
 import { ArrowLeftOutlined, SearchOutlined } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
-import { DataitemService } from "../services/dataitem.service";
+import { DataItemService } from "../services/dataitem.service";
 
 const { Title, Text } = Typography;
 
@@ -37,7 +37,7 @@ const DatasetDetailPage: React.FC = () => {
     try {
       setLoading(true);
 
-      const res = await DataitemService.getDataitemByDataset(datasetId);
+      const res = await DataItemService.getByDataset(Number(datasetId));
 
       setDataItems(res || []);
     } catch (error) {
