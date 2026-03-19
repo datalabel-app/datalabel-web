@@ -230,19 +230,34 @@ const TasksPage: React.FC = () => {
                 {
                   title: "Action",
                   key: "action",
-                  render: (_: any, task: Task) =>
-                    role === 3 ? (
-                      <Button
-                        type="primary"
-                        onClick={() => handleAnnotate(task)}
-                      >
-                        {task.status === 3 ? "Re-Annotate" : "Annotate"}
-                      </Button>
-                    ) : (
-                      <Button type="primary" onClick={() => handleReview(task)}>
-                        Review
-                      </Button>
-                    ),
+                  render: (_: any, task: Task) => {
+                    if (role === 3) {
+                      if (task.status === 1) {
+                        return (
+                          <Button type="primary" disabled>
+                            Waiting Review
+                          </Button>
+                        );
+                      }
+                      return (
+                        <Button
+                          type="primary"
+                          onClick={() => handleAnnotate(task)}
+                        >
+                          Annotate
+                        </Button>
+                      );
+                    } else {
+                      return (
+                        <Button
+                          type="primary"
+                          onClick={() => handleReview(task)}
+                        >
+                          Review
+                        </Button>
+                      );
+                    }
+                  },
                 },
               ]}
               dataSource={record.tasks.map((t: Task) => ({
