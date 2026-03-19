@@ -8,7 +8,6 @@ export interface Noti {
   error?: string;
   type: "TASK_ASSIGNED" | "TASK_FOR_REVIEW" | "TASK_REJECTED";
 }
-
 export const useNotification = () => {
   const [notifications, setNotifications] = useState<Noti[]>([]);
 
@@ -16,7 +15,7 @@ export const useNotification = () => {
     const token = localStorage.getItem("token");
 
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl("http://localhost:5245/hub/notifications", {
+      .withUrl(`https://datalabel.site/hub/notifications`, {
         accessTokenFactory: () => token!,
       })
       .withAutomaticReconnect()
