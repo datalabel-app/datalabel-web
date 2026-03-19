@@ -232,6 +232,13 @@ const TasksPage: React.FC = () => {
                   key: "action",
                   render: (_: any, task: Task) => {
                     if (role === 3) {
+                      if (task.status === 2) {
+                        return (
+                          <Button type="primary" disabled>
+                            Done
+                          </Button>
+                        );
+                      }
                       if (task.status === 1) {
                         return (
                           <Button type="primary" disabled>
@@ -248,6 +255,13 @@ const TasksPage: React.FC = () => {
                         </Button>
                       );
                     } else {
+                      if (task.status === 2) {
+                        return (
+                          <Button type="primary" disabled>
+                            Done
+                          </Button>
+                        );
+                      }
                       if (task.status === 3) {
                         return (
                           <Button type="primary" disabled>
