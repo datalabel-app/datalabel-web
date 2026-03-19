@@ -11,6 +11,7 @@ import {
   Space,
   message,
   Spin,
+  Tag,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { AuthService } from "../services/auth.service";
@@ -23,6 +24,7 @@ interface User {
   fullName: string;
   email: string;
   role: number;
+  status: "Active" | "Banned";
 }
 
 const roleOptions = [
@@ -42,6 +44,7 @@ const roleMap: any = {
 const UserManagementPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [filterRole, setFilterRole] = useState<number | undefined>();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -51,9 +54,7 @@ const UserManagementPage: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-
       const res = await UserService.getAll();
-
       setUsers(res || []);
     } catch {
       message.error("Load users failed");
@@ -69,14 +70,10 @@ const UserManagementPage: React.FC = () => {
   const handleCreate = async (values: any) => {
     try {
       setSubmitLoading(true);
-
       await AuthService.register(values);
-
       message.success("User created");
-
       setModalOpen(false);
       form.resetFields();
-
       fetchUsers();
     } catch {
       message.error("Create user failed");
@@ -84,6 +81,44 @@ const UserManagementPage: React.FC = () => {
       setSubmitLoading(false);
     }
   };
+  const handleBanUnban = (user: User) => {
+    const isBan = user.status === "Active";
+
+    Modal.confirm({
+      title: isBan ? "Confirm Ban User" : "Confirm Unban User",
+      content: isBan
+        ? `Are you sure you want to BAN "${user.fullName}"?`
+        : `Are you sure you want to UNBAN "${user.fullName}"?`,
+      okText: isBan ? "Ban" : "Unban",
+      okType: isBan ? "danger" : "primary",
+      cancelText: "Cancel",
+
+      onOk: async () => {
+        try {
+          setLoading(true);
+
+          if (isBan) {
+            await UserService.banUser(user.userId);
+            message.success(`${user.fullName} has been banned`);
+          } else {
+            await UserService.unbanUser(user.userId);
+            message.success(`${user.fullName} has been unbanned`);
+          }
+
+          fetchUsers();
+        } catch {
+          message.error("Action failed");
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
+  };
+
+  // Lọc theo role nếu filterRole được chọn
+  const filteredUsers = filterRole
+    ? users.filter((u) => u.role === filterRole)
+    : users;
 
   const columns = [
     {
@@ -104,6 +139,33 @@ const UserManagementPage: React.FC = () => {
       dataIndex: "role",
       render: (role: number) => roleMap[role],
     },
+    {
+      title: "Status",
+      dataIndex: "status",
+      render: (status: string) =>
+        status === "Active" ? (
+          <Tag color="green">Active</Tag>
+        ) : (
+          <Tag color="red">Banned</Tag>
+        ),
+    },
+    {
+      title: "Action",
+      render: (_: any, user: User) => {
+        if (user.role === 1) {
+          return <Tag color="gold">Protected</Tag>;
+        }
+
+        return (
+          <Button
+            danger={user.status === "Active"}
+            onClick={() => handleBanUnban(user)}
+          >
+            {user.status === "Active" ? "Ban" : "Unban"}
+          </Button>
+        );
+      },
+    },
   ];
 
   if (loading) {
@@ -121,24 +183,34 @@ const UserManagementPage: React.FC = () => {
           style={{
             width: "100%",
             justifyContent: "space-between",
+            marginBottom: 16,
           }}
         >
           <Title level={4}>User Management</Title>
 
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setModalOpen(true)}
-          >
-            Create User
-          </Button>
+          <Space>
+            <Select
+              placeholder="Filter by Role"
+              allowClear
+              style={{ width: 180 }}
+              value={filterRole}
+              onChange={(value) => setFilterRole(value)}
+              options={roleOptions}
+            />
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setModalOpen(true)}
+            >
+              Create User
+            </Button>
+          </Space>
         </Space>
 
         <Table
           rowKey="userId"
           columns={columns}
-          dataSource={users}
-          style={{ marginTop: 20 }}
+          dataSource={filteredUsers}
           pagination={{ pageSize: 10 }}
         />
       </Card>
@@ -165,14 +237,6 @@ const UserManagementPage: React.FC = () => {
             rules={[{ required: true, type: "email" }]}
           >
             <Input />
-          </Form.Item>
-
-          <Form.Item
-            label="Password"
-            name="password"
-            rules={[{ required: true }]}
-          >
-            <Input.Password />
           </Form.Item>
 
           <Form.Item label="Role" name="role" rules={[{ required: true }]}>

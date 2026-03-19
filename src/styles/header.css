@@ -11,6 +11,7 @@
 .header-left {
   display: flex;
   align-items: center;
+  flex: 1;
 }
 
 .logo {
@@ -23,6 +24,7 @@
 .nav-menu {
   border-bottom: none !important;
   background: transparent !important;
+  flex: 1;
 }
 
 /* RIGHT */
