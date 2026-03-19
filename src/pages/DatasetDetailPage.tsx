@@ -58,6 +58,7 @@ interface Task {
   annotatorName: string;
   reviewerName: string;
   status: string;
+  labels: any;
 }
 
 interface Round {
@@ -885,8 +886,8 @@ const DatasetDetailPage: React.FC = () => {
                 onChange={(value) => updateEditShapeType(roundIndex, value)}
                 style={{ width: 200, marginBottom: 8 }}
               >
-                <Option value={0}>Bounding Box</Option>
-                <Option value={1}>Classification</Option>
+                <Select.Option value={0}>Bounding Box</Select.Option>
+                <Select.Option value={1}>Classification</Select.Option>
               </Select>
 
               <Button onClick={() => addEditLabel(roundIndex)}>

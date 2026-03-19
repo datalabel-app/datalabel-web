@@ -131,7 +131,9 @@ const TasksPage: React.FC = () => {
 
       // ================= STATUS FILTER =================
       if (statusFilter !== null) {
-        filteredTasks = filteredTasks.filter((t) => t.status === statusFilter);
+        filteredTasks = filteredTasks.filter(
+          (t: any) => t.status === statusFilter,
+        );
       }
 
       return { ...group, tasks: filteredTasks };

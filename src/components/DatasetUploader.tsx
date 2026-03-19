@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Upload, message } from "antd";
-import type { UploadFile } from "antd/es/upload/interface";
+import type { UploadFile, UploadFileStatus } from "antd/es/upload/interface";
 import { PlusOutlined } from "@ant-design/icons";
 
 interface Props {
@@ -16,9 +16,9 @@ const DatasetUploader: React.FC<Props> = ({ files, setFiles }) => {
     const newList = files.map((file) => ({
       uid: file.name + file.lastModified, // uid ổn định
       name: file.name,
-      status: "done",
+      status: "done" as UploadFileStatus,
       url: URL.createObjectURL(file),
-      originFileObj: file,
+      originFileObj: file as any,
     }));
     setFileList(newList);
 
