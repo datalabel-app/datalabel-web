@@ -1,23 +1,26 @@
 import React, { useEffect, useState } from "react";
 import {
-  Input,
-  Card,
-  Row,
-  Col,
-  Space,
-  Typography,
-  Spin,
-  Empty,
-  message,
-  Button,
+  Table,
   Tag,
+  Button,
   Progress,
+  Typography,
+  Input,
+  Spin,
+  message,
+  Select,
 } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { TasksService } from "../services/task.service";
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
+const { Option } = Select;
+
+interface Dataset {
+  datasetId: number;
+  datasetName: string;
+}
 
 interface Round {
   roundId: number;
@@ -32,32 +35,27 @@ interface Task {
   fileUrl: string;
   status: number;
   round: Round;
+  dataset: Dataset;
 }
 
 const TasksPage: React.FC = () => {
   const navigate = useNavigate();
+  const role = Number(localStorage.getItem("role"));
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<number | null>(null);
 
-  const role = Number(localStorage.getItem("role"));
-
-  // =========================
-  // LOAD TASKS
-  // =========================
-
+  // ========================= LOAD TASKS =========================
   const loadTasks = async () => {
     try {
       setLoading(true);
-
       let data: Task[] = [];
 
       if (role === 3) {
         data = await TasksService.getTasksByAnnotator();
-      }
-
-      if (role === 4) {
+      } else if (role === 4) {
         data = await TasksService.getTasksByReviewer();
       }
 
@@ -73,10 +71,7 @@ const TasksPage: React.FC = () => {
     loadTasks();
   }, []);
 
-  // =========================
-  // STATUS TAG
-  // =========================
-
+  // ========================= STATUS TAG =========================
   const getStatusTag = (status: number) => {
     switch (status) {
       case 0:
@@ -92,10 +87,7 @@ const TasksPage: React.FC = () => {
     }
   };
 
-  // =========================
-  // NAVIGATE
-  // =========================
-
+  // ========================= NAVIGATION =========================
   const handleAnnotate = (task: Task) => {
     if (task.round.shapeType === 1) {
       navigate(`/classification/${task.taskId}`);
@@ -104,33 +96,87 @@ const TasksPage: React.FC = () => {
     }
   };
 
-  // =========================
-  // FILTER
-  // =========================
+  const handleReview = (task: Task) => {
+    if (task.round.shapeType === 1) {
+      navigate(`/review/type/${task.taskId}`);
+    } else {
+      navigate(`/review/${task.taskId}`);
+    }
+  };
 
-  const filtered = tasks.filter((t) =>
-    t.fileUrl?.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  // =========================
-  // GROUP TASKS BY ROUND
-  // =========================
-
-  const groupedTasks = filtered.reduce((acc: any, task) => {
+  // ========================= GROUP BY ROUND =========================
+  const groupedTasks = tasks.reduce((acc: any, task) => {
     const roundId = task.round.roundId;
-
     if (!acc[roundId]) {
       acc[roundId] = {
         round: task.round,
         tasks: [],
       };
     }
-
     acc[roundId].tasks.push(task);
-
     return acc;
   }, {});
 
+  // ========================= FILTER =========================
+  const filteredGroups = Object.values(groupedTasks)
+    .map((group: any) => {
+      let filteredTasks = group.tasks;
+
+      // ================= SEARCH BY DATASET NAME =================
+      if (search.trim()) {
+        filteredTasks = filteredTasks.filter((t: Task) =>
+          t.dataset?.datasetName.toLowerCase().includes(search.toLowerCase()),
+        );
+      }
+
+      // ================= STATUS FILTER =================
+      if (statusFilter !== null) {
+        filteredTasks = filteredTasks.filter(
+          (t: any) => t.status === statusFilter,
+        );
+      }
+
+      return { ...group, tasks: filteredTasks };
+    })
+    .filter((group) => group.tasks.length > 0);
+
+  // ========================= TABLE DATA =========================
+  const tableData = filteredGroups.map((group: any) => {
+    const total = group.tasks.length;
+    const done =
+      role === 3
+        ? group.tasks.filter((t: Task) => [1, 2, 3].includes(t.status)).length
+        : group.tasks.filter((t: Task) => [2, 3].includes(t.status)).length;
+
+    return {
+      key: group.round.roundId,
+      roundNumber: group.round.roundNumber,
+      description: group.round.description,
+      datasetName: group.tasks[0]?.dataset?.datasetName,
+      totalTasks: total,
+      doneTasks: done,
+      tasks: group.tasks,
+    };
+  });
+
+  // ========================= TABLE COLUMNS =========================
+  const columns = [
+    { title: "Dataset", dataIndex: "datasetName", key: "dataset" },
+    { title: "Round", dataIndex: "roundNumber", key: "round" },
+    { title: "Description", dataIndex: "description", key: "description" },
+    {
+      title: "Progress",
+      key: "progress",
+      render: (_: any, record: any) => (
+        <Progress
+          percent={Math.round((record.doneTasks / record.totalTasks) * 100)}
+          size="small"
+        />
+      ),
+    },
+  ];
+
+  // ========================= LOADING =========================
   if (loading)
     return (
       <div style={{ textAlign: "center", padding: 50 }}>
@@ -144,144 +190,70 @@ const TasksPage: React.FC = () => {
         {role === 3 ? "My Annotation Tasks" : "My Review Tasks"}
       </Title>
 
-      {/* SEARCH */}
+      <div style={{ marginBottom: 20, display: "flex", gap: 16 }}>
+        <Input
+          style={{ width: 300 }}
+          placeholder="Search by dataset name..."
+          prefix={<SearchOutlined />}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
 
-      <Input
-        style={{ width: 300, marginBottom: 30 }}
-        placeholder="Search image..."
-        prefix={<SearchOutlined />}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        <Select
+          style={{ width: 200 }}
+          placeholder="Filter by Status"
+          allowClear
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value ?? null)}
+        >
+          <Option value={0}>Pending</Option>
+          <Option value={1}>Annotating</Option>
+          <Option value={2}>Approved</Option>
+          <Option value={3}>Rejected</Option>
+        </Select>
+      </div>
+
+      <Table
+        columns={columns}
+        dataSource={tableData}
+        expandable={{
+          expandedRowRender: (record) => (
+            <Table
+              columns={[
+                { title: "Task ID", dataIndex: "taskId", key: "taskId" },
+                {
+                  title: "Status",
+                  dataIndex: "status",
+                  key: "status",
+                  render: (status: number) => getStatusTag(status),
+                },
+                {
+                  title: "Action",
+                  key: "action",
+                  render: (_: any, task: Task) =>
+                    role === 3 ? (
+                      <Button
+                        type="primary"
+                        onClick={() => handleAnnotate(task)}
+                      >
+                        {task.status === 3 ? "Re-Annotate" : "Annotate"}
+                      </Button>
+                    ) : (
+                      <Button type="primary" onClick={() => handleReview(task)}>
+                        Review
+                      </Button>
+                    ),
+                },
+              ]}
+              dataSource={record.tasks.map((t: Task) => ({
+                ...t,
+                key: t.taskId,
+              }))}
+              pagination={false}
+            />
+          ),
+        }}
       />
-
-      {filtered.length === 0 ? (
-        <Empty description="No tasks found" />
-      ) : (
-        Object.values(groupedTasks).map((group: any) => {
-          const total = group.tasks.length;
-
-          let done = 0;
-
-          // Annotator progress
-          if (role === 3) {
-            done = group.tasks.filter(
-              (t: Task) => t.status === 1 || t.status === 2 || t.status === 3,
-            ).length;
-          }
-
-          // Reviewer progress
-          if (role === 4) {
-            done = group.tasks.filter(
-              (t: Task) => t.status === 2 || t.status === 3,
-            ).length;
-          }
-
-          const percent = total === 0 ? 0 : Math.round((done / total) * 100);
-
-          return (
-            <div key={group.round.roundId} style={{ marginBottom: 50 }}>
-              {/* ROUND HEADER */}
-
-              <Card style={{ marginBottom: 20 }} bodyStyle={{ padding: 16 }}>
-                <Space direction="vertical" style={{ width: "100%" }}>
-                  <Title level={4} style={{ margin: 0 }}>
-                    Round {group.round.roundNumber}
-                  </Title>
-
-                  <Text type="secondary">{group.round.description}</Text>
-
-                  <Progress percent={percent} size="small" />
-
-                  <Text type="secondary">
-                    {done} / {total} {role === 3 ? "annotated" : "reviewed"}
-                  </Text>
-                </Space>
-              </Card>
-
-              {/* TASK GRID */}
-
-              <Row gutter={[16, 16]}>
-                {group.tasks.map((task: Task) => (
-                  <Col span={6} key={task.taskId}>
-                    <Card
-                      hoverable
-                      style={{
-                        borderRadius: 12,
-                        overflow: "hidden",
-                      }}
-                      cover={
-                        <img
-                          src={task.fileUrl}
-                          style={{
-                            height: 200,
-                            objectFit: "cover",
-                          }}
-                        />
-                      }
-                    >
-                      <Space direction="vertical" style={{ width: "100%" }}>
-                        {getStatusTag(task.status)}
-
-                        {/* ANNOTATOR */}
-
-                        {role === 3 && task.status === 0 && (
-                          <Button
-                            type="primary"
-                            block
-                            onClick={() => handleAnnotate(task)}
-                          >
-                            Start Annotation
-                          </Button>
-                        )}
-
-                        {role === 3 && task.status === 3 && (
-                          <Button
-                            type="primary"
-                            block
-                            onClick={() => handleAnnotate(task)}
-                          >
-                            Re-Annotate
-                          </Button>
-                        )}
-
-                        {role === 3 && task.status === 1 && (
-                          <Button block disabled>
-                            Waiting for Review
-                          </Button>
-                        )}
-
-                        {/* REVIEWER */}
-
-                        {role === 4 && task.status === 0 && (
-                          <Button block disabled>
-                            Waiting for Annotation
-                          </Button>
-                        )}
-
-                        {role === 4 && task.status === 1 && (
-                          <Button
-                            type="primary"
-                            block
-                            onClick={() => navigate(`/review/${task.taskId}`)}
-                          >
-                            Start Review
-                          </Button>
-                        )}
-
-                        {task.status === 2 && (
-                          <Button block disabled>
-                            Completed
-                          </Button>
-                        )}
-                      </Space>
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-            </div>
-          );
-        })
-      )}
     </div>
   );
 };

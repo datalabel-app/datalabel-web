@@ -1,58 +1,14 @@
 import React, { useState } from "react";
-import {
-  Form,
-  Input,
-  Button,
-  Card,
-  Space,
-  Collapse,
-  Select,
-  Typography,
-  Row,
-  Col,
-  message,
-} from "antd";
-import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { Form, Input, Button, Card, Typography, message } from "antd";
 import { ProjectService } from "../services/project.service";
 import { useNavigate } from "react-router-dom";
 
 const { Title } = Typography;
-const { Panel } = Collapse;
-
-interface LabelItem {
-  labelName: string;
-  labelType: string;
-  description: string;
-}
 
 const CreateProjectPage: React.FC = () => {
   const [form] = Form.useForm();
-  const [labels, setLabels] = useState<LabelItem[]>([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
-  const addLabel = () => {
-    setLabels([
-      ...labels,
-      {
-        labelName: "",
-        labelType: "box",
-        description: "",
-      },
-    ]);
-  };
-
-  const updateLabel = (index: number, key: keyof LabelItem, value: string) => {
-    const newLabels = [...labels];
-    newLabels[index][key] = value;
-    setLabels(newLabels);
-  };
-
-  const removeLabel = (index: number) => {
-    const newLabels = [...labels];
-    newLabels.splice(index, 1);
-    setLabels(newLabels);
-  };
 
   const onFinish = async (values: any) => {
     try {

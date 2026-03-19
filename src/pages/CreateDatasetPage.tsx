@@ -42,7 +42,7 @@ interface RoundItem {
 const CreateDatasetPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-
+  const [uploadType, setUploadType] = useState<"image" | "zip">("image");
   const [files, setFiles] = useState<File[]>([]);
   const [rounds, setRounds] = useState<RoundItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -109,7 +109,11 @@ const CreateDatasetPage: React.FC = () => {
   const onFinish = async (values: any) => {
     try {
       if (files.length === 0) {
-        message.warning("Please upload at least 1 image");
+        message.warning(
+          uploadType === "image"
+            ? "Please upload at least 1 image"
+            : "Please upload a zip file",
+        );
         return;
       }
 
@@ -149,9 +153,19 @@ const CreateDatasetPage: React.FC = () => {
       }
 
       // 3 UPLOAD IMAGES
-      const uploadRes = await UploadService.uploadImages(files);
+      let images: UploadedImage[] = [];
 
-      const images: UploadedImage[] = uploadRes.urls || uploadRes;
+      if (uploadType === "image") {
+        const uploadRes = await UploadService.uploadImages(files);
+        images = uploadRes.urls || uploadRes;
+      } else {
+        const uploadRes = await UploadService.uploadZip(files[0]);
+
+        images = uploadRes.map((item: any) => ({
+          url: item.url,
+          publicId: item.publicId,
+        }));
+      }
 
       // 4 CREATE DATAITEM
       await Promise.all(
@@ -259,10 +273,30 @@ const CreateDatasetPage: React.FC = () => {
             ))}
           </Space>
 
-          <Divider>Upload Images</Divider>
-
+          <Divider>Upload</Divider>
+          <Form.Item label="Upload Type">
+            <Select
+              value={uploadType}
+              onChange={(value) => setUploadType(value)}
+            >
+              <Option value="image">Upload Images</Option>
+              <Option value="zip">Upload ZIP</Option>
+            </Select>
+          </Form.Item>
           <Form.Item>
-            <DatasetUploader files={files} setFiles={setFiles} />
+            {uploadType === "image" ? (
+              <DatasetUploader files={files} setFiles={setFiles} />
+            ) : (
+              <input
+                type="file"
+                accept=".zip"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setFiles([e.target.files[0]]);
+                  }
+                }}
+              />
+            )}
           </Form.Item>
 
           <Button type="primary" htmlType="submit" loading={loading}>

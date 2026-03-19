@@ -13,6 +13,7 @@ import {
   Select,
   Modal,
   Space,
+  Divider,
 } from "antd";
 
 import {
@@ -31,11 +32,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { DataItemService } from "../services/dataitem.service";
 import { DatasetRoundService } from "../services/datasetround.service";
 import { UserService } from "../services/user.service";
-import { TasksService } from "../services/task.service.ts";
-import { ExportService } from "../services/export.service.ts";
-import { ErrorHistoryService } from "../services/error-history.service.ts";
+import { TasksService } from "../services/task.service";
+import { ExportService } from "../services/export.service";
+import { ErrorHistoryService } from "../services/error-history.service";
 import dayjs from "dayjs";
 import { DatasetService } from "../services/dataset.service";
+import { LabelService } from "../services/label.service";
 
 const { Title, Text } = Typography;
 
@@ -56,6 +58,7 @@ interface Task {
   annotatorName: string;
   reviewerName: string;
   status: string;
+  labels: any;
 }
 
 interface Round {
@@ -68,10 +71,22 @@ interface User {
   fullName: string;
 }
 
+interface TableItem {
+  key: number;
+  itemId: number;
+  fileUrl: string;
+  status: string;
+  annotatorName?: string;
+  reviewerName?: string;
+}
+
 const DatasetDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { datasetId } = useParams();
-
+  const [roundLabels, setRoundLabels] = useState<
+    { labelName: string; labelId: number }[]
+  >([]);
+  const [selectedLabel, setSelectedLabel] = useState<number | undefined>();
   const [dataItems, setDataItems] = useState<DataItem[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [rounds, setRounds] = useState<Round[]>([]);
@@ -98,6 +113,77 @@ const DatasetDetailPage: React.FC = () => {
   const [editingDataset, setEditingDataset] = useState<any>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [dataset, setDataset] = useState<any>(null);
+  const [editRounds, setEditRounds] = useState<
+    {
+      roundNumber: number;
+      description: string;
+      shapeType: number;
+      labels: { labelName: string }[];
+    }[]
+  >([]);
+  const [maxRoundNumber, setMaxRoundNumber] = useState(0);
+
+  // ADD ROUND
+  const addEditRound = () => {
+    const newNumber = maxRoundNumber + 1;
+    setMaxRoundNumber(newNumber);
+
+    setEditRounds([
+      ...editRounds,
+      {
+        roundNumber: newNumber,
+        description: "",
+        shapeType: 0,
+        labels: [],
+      },
+    ]);
+  };
+
+  // REMOVE ROUND
+  const removeEditRound = (index: number) => {
+    const newRounds = [...editRounds];
+    newRounds.splice(index, 1);
+    setEditRounds(newRounds);
+  };
+
+  // UPDATE ROUND DESCRIPTION
+  const updateEditRoundDescription = (index: number, value: string) => {
+    const newRounds = [...editRounds];
+    newRounds[index].description = value;
+    setEditRounds(newRounds);
+  };
+
+  // UPDATE SHAPETYPE
+  const updateEditShapeType = (index: number, value: number) => {
+    const newRounds = [...editRounds];
+    newRounds[index].shapeType = value;
+    setEditRounds(newRounds);
+  };
+
+  // ADD LABEL
+  const addEditLabel = (roundIndex: number) => {
+    const newRounds = [...editRounds];
+    newRounds[roundIndex].labels.push({ labelName: "" });
+    setEditRounds(newRounds);
+  };
+
+  // UPDATE LABEL
+  const updateEditLabel = (
+    roundIndex: number,
+    labelIndex: number,
+    value: string,
+  ) => {
+    const newRounds = [...editRounds];
+    newRounds[roundIndex].labels[labelIndex].labelName = value;
+    setEditRounds(newRounds);
+  };
+
+  // REMOVE LABEL
+  const removeEditLabel = (roundIndex: number, labelIndex: number) => {
+    const newRounds = [...editRounds];
+    newRounds[roundIndex].labels.splice(labelIndex, 1);
+    setEditRounds(newRounds);
+  };
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -155,11 +241,24 @@ const DatasetDetailPage: React.FC = () => {
 
   /* ============================= ROUND FILTER ============================= */
 
-  const handleRoundChange = (value?: number) => {
-    setSelectedRound(value);
+  const handleRoundChange = async (roundId?: number) => {
+    setSelectedRound(roundId);
+    setSelectedLabel(undefined);
 
-    if (value) fetchTasks(value);
-    else setTasks([]);
+    if (roundId) {
+      fetchTasks(roundId);
+
+      try {
+        const labels = await LabelService.getByRound(roundId);
+        setRoundLabels(labels || []);
+      } catch {
+        message.error("Load labels failed");
+        setRoundLabels([]);
+      }
+    } else {
+      setTasks([]);
+      setRoundLabels([]);
+    }
   };
 
   /* ============================= CREATE TASK ============================= */
@@ -258,7 +357,7 @@ const DatasetDetailPage: React.FC = () => {
 
   /* ============================= TABLE ============================= */
 
-  const tableData = selectedRound
+  const tableData: TableItem[] = selectedRound
     ? tasks.map((t) => ({
         key: t.taskId,
         itemId: t.dataItemId,
@@ -275,33 +374,79 @@ const DatasetDetailPage: React.FC = () => {
         status: i.status,
       }));
 
-  const filtered = tableData.filter((i: any) =>
+  let filtered = tableData.filter((i: any) =>
     i.fileUrl?.toLowerCase().includes(search.toLowerCase()),
   );
-  const hasAnnotator = selectedRound && tableData.some((item) => (item as any).annotatorName);
-  const hasReviewer = selectedRound && tableData.some((item) => (item as any).reviewerName);
+
+  if (selectedLabel) {
+    filtered = filtered.filter((item) =>
+      tasks.some(
+        (t) =>
+          t.dataItemId === item.itemId &&
+          t.labels?.some((l: any) => l.labelId === selectedLabel),
+      ),
+    );
+  }
+  const hasAnnotator = tableData.some((item) => item.annotatorName);
+  const hasReviewer = tableData.some((item) => item.reviewerName);
 
   const columns: any = [
     {
-      title: "Image",
+      title: "File",
       dataIndex: "fileUrl",
-      render: (url: string) => (
-        <img
-          src={url}
-          style={{
-            width: 90,
-            height: 90,
-            objectFit: "cover",
-            borderRadius: 8,
-            border: "1px solid #eee",
-            transition: "0.2s",
-          }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.transform = "scale(1.05)")
-          }
-          onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-        />
-      ),
+      render: (url: string) => {
+        const ext = url?.split(".").pop()?.toLowerCase();
+
+        const isImage = ["jpg", "jpeg", "png", "webp"].includes(ext || "");
+        const isVideo = ["mp4", "mov", "avi"].includes(ext || "");
+        const isAudio = ["mp3", "wav"].includes(ext || "");
+
+        if (isImage) {
+          return (
+            <img
+              src={url}
+              style={{
+                width: 90,
+                height: 90,
+                objectFit: "cover",
+                borderRadius: 8,
+                border: "1px solid #eee",
+                transition: "0.2s",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.transform = "scale(1.05)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.transform = "scale(1)")
+              }
+            />
+          );
+        }
+
+        if (isVideo) {
+          return (
+            <video
+              src={url}
+              controls
+              style={{
+                width: 120,
+                height: 90,
+                borderRadius: 8,
+              }}
+            />
+          );
+        }
+
+        if (isAudio) {
+          return (
+            <audio controls style={{ width: 150 }}>
+              <source src={url} />
+            </audio>
+          );
+        }
+
+        return <Tag>Unsupported</Tag>;
+      },
     },
 
     ...(hasAnnotator
@@ -332,6 +477,7 @@ const DatasetDetailPage: React.FC = () => {
         if (s === "Annotating") return <Tag color="processing">Annotating</Tag>;
         if (s === "Approved") return <Tag color="green">Approved</Tag>;
         if (s === "Rejected") return <Tag color="red">Rejected</Tag>;
+        if (s === "Done") return <Tag color="green">Done</Tag>;
         return <Tag>{s}</Tag>;
       },
     },
@@ -367,12 +513,36 @@ const DatasetDetailPage: React.FC = () => {
     try {
       setEditLoading(true);
 
+      // 1️⃣ Update dataset
       await DatasetService.update(Number(datasetId), editingDataset);
 
-      message.success("Updated successfully");
+      // 2️⃣ Tạo Round + Label mới nếu có
+      for (const round of editRounds) {
+        const roundRes = await DatasetRoundService.create({
+          datasetId: Number(datasetId),
+          roundNumber: round.roundNumber,
+          description: round.description,
+          shapeType: round.shapeType,
+          status: "Active",
+        });
+
+        const roundId = roundRes.roundId;
+
+        if (round.labels.length > 0) {
+          await Promise.all(
+            round.labels.map((label) =>
+              LabelService.create({ roundId, labelName: label.labelName }),
+            ),
+          );
+        }
+      }
+
+      message.success("Dataset updated successfully");
       setEditModal(false);
+      setEditRounds([]);
       fetchData();
-    } catch {
+    } catch (error) {
+      console.error(error);
       message.error("Update failed");
     } finally {
       setEditLoading(false);
@@ -410,9 +580,17 @@ const DatasetDetailPage: React.FC = () => {
               <Button
                 type="primary"
                 onClick={() => {
-                  setEditingDataset({
-                    datasetName: dataset?.datasetName,
-                  });
+                  setEditingDataset({ datasetName: dataset?.datasetName });
+
+                  setEditRounds([]);
+
+                  const roundsData = rounds || [];
+                  setMaxRoundNumber(
+                    roundsData.length
+                      ? Math.max(...roundsData.map((r) => r.roundNumber))
+                      : 0,
+                  );
+
                   setEditModal(true);
                 }}
               >
@@ -448,6 +626,20 @@ const DatasetDetailPage: React.FC = () => {
               options={rounds.map((r) => ({
                 label: `Round ${r.roundNumber}`,
                 value: r.roundId,
+              }))}
+            />
+          </Col>
+
+          <Col>
+            <Select
+              placeholder="Filter by Label"
+              style={{ width: 180 }}
+              value={selectedLabel}
+              allowClear
+              onChange={(v) => setSelectedLabel(v)}
+              options={roundLabels.map((l) => ({
+                label: l.labelName,
+                value: l.labelId,
               }))}
             />
           </Col>
@@ -651,8 +843,10 @@ const DatasetDetailPage: React.FC = () => {
         onCancel={() => setEditModal(false)}
         onOk={handleUpdateDataset}
         confirmLoading={editLoading}
+        width={800}
       >
         <Space direction="vertical" style={{ width: "100%" }}>
+          {/* Dataset Name */}
           <Input
             placeholder="Dataset Name"
             value={editingDataset?.datasetName}
@@ -663,6 +857,61 @@ const DatasetDetailPage: React.FC = () => {
               })
             }
           />
+
+          <Divider>Rounds & Labels</Divider>
+
+          <Button onClick={addEditRound}>Add Round</Button>
+
+          {editRounds.map((round, roundIndex) => (
+            <Card
+              key={roundIndex}
+              size="small"
+              title={`Round ${round.roundNumber}`}
+              extra={
+                <Button danger onClick={() => removeEditRound(roundIndex)}>
+                  Delete Round
+                </Button>
+              }
+            >
+              <Input
+                placeholder="Round description"
+                value={round.description}
+                onChange={(e) =>
+                  updateEditRoundDescription(roundIndex, e.target.value)
+                }
+                style={{ marginBottom: 8 }}
+              />
+              <Select
+                value={round.shapeType}
+                onChange={(value) => updateEditShapeType(roundIndex, value)}
+                style={{ width: 200, marginBottom: 8 }}
+              >
+                <Select.Option value={0}>Bounding Box</Select.Option>
+                <Select.Option value={1}>Classification</Select.Option>
+              </Select>
+
+              <Button onClick={() => addEditLabel(roundIndex)}>
+                Add Label
+              </Button>
+              {round.labels.map((label, labelIndex) => (
+                <Space key={labelIndex} style={{ width: "100%" }}>
+                  <Input
+                    placeholder="Label Name"
+                    value={label.labelName}
+                    onChange={(e) =>
+                      updateEditLabel(roundIndex, labelIndex, e.target.value)
+                    }
+                  />
+                  <Button
+                    danger
+                    onClick={() => removeEditLabel(roundIndex, labelIndex)}
+                  >
+                    Delete
+                  </Button>
+                </Space>
+              ))}
+            </Card>
+          ))}
         </Space>
       </Modal>
     </div>

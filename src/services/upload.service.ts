@@ -29,4 +29,18 @@ export const UploadService = {
 
     return response.data;
   },
+
+  uploadZip: async (file: File) => {
+    const formData = new FormData();
+
+    formData.append("zipFile", file);
+
+    const response = await axiosInstance.post("/api/Upload/zip", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    return response.data;
+  },
 };
