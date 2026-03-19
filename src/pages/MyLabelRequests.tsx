@@ -34,7 +34,7 @@ const STATUS_MAP: Record<number, { text: string; color: string }> = {
 
 const SHAPE_MAP: Record<number, string> = {
   0: "BBox",
-  1: "Polygon",
+  1: "Classfication",
 };
 
 const MyLabelRequests: React.FC = () => {
