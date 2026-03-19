@@ -12,8 +12,13 @@ import {
   message,
   Spin,
   Tag,
+  Upload,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  UploadOutlined,
+  DownloadOutlined,
+} from "@ant-design/icons";
 import { AuthService } from "../services/auth.service";
 import { UserService } from "../services/user.service";
 
@@ -67,6 +72,7 @@ const UserManagementPage: React.FC = () => {
     fetchUsers();
   }, []);
 
+  // ================= CREATE =================
   const handleCreate = async (values: any) => {
     try {
       setSubmitLoading(true);
@@ -81,6 +87,8 @@ const UserManagementPage: React.FC = () => {
       setSubmitLoading(false);
     }
   };
+
+  // ================= BAN / UNBAN =================
   const handleBanUnban = (user: User) => {
     const isBan = user.status === "Active";
 
@@ -115,11 +123,48 @@ const UserManagementPage: React.FC = () => {
     });
   };
 
-  // Lọc theo role nếu filterRole được chọn
+  // ================= EXPORT =================
+  const handleDownloadTemplate = async () => {
+    try {
+      const blob = await AuthService.exportTemplate();
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "UserTemplate.xlsx";
+      link.click();
+
+      message.success("Download template success");
+    } catch {
+      message.error("Download failed");
+    }
+  };
+
+  // ================= IMPORT =================
+  const handleImport = async (file: File) => {
+    try {
+      const res = await AuthService.importUsers(file);
+
+      message.success(
+        `Import success: ${res.successCount}, errors: ${res.errorCount}`,
+      );
+
+      console.log("Errors:", res.errors);
+
+      fetchUsers();
+    } catch {
+      message.error("Import failed");
+    }
+
+    return false;
+  };
+
+  // ================= FILTER =================
   const filteredUsers = filterRole
     ? users.filter((u) => u.role === filterRole)
     : users;
 
+  // ================= TABLE =================
   const columns = [
     {
       title: "ID",
@@ -168,6 +213,7 @@ const UserManagementPage: React.FC = () => {
     },
   ];
 
+  // ================= LOADING =================
   if (loading) {
     return (
       <div style={{ textAlign: "center", marginTop: 120 }}>
@@ -197,6 +243,25 @@ const UserManagementPage: React.FC = () => {
               onChange={(value) => setFilterRole(value)}
               options={roleOptions}
             />
+
+            {/* EXPORT */}
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleDownloadTemplate}
+            >
+              Template
+            </Button>
+
+            {/* IMPORT */}
+            <Upload
+              beforeUpload={handleImport}
+              showUploadList={false}
+              accept=".xlsx"
+            >
+              <Button icon={<UploadOutlined />}>Import</Button>
+            </Upload>
+
+            {/* CREATE */}
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -215,7 +280,7 @@ const UserManagementPage: React.FC = () => {
         />
       </Card>
 
-      {/* CREATE USER */}
+      {/* MODAL CREATE */}
       <Modal
         open={modalOpen}
         title="Create User"
