@@ -248,6 +248,13 @@ const TasksPage: React.FC = () => {
                         </Button>
                       );
                     } else {
+                      if (task.status === 3) {
+                        return (
+                          <Button type="primary" disabled>
+                            Waiting Annotating
+                          </Button>
+                        );
+                      }
                       return (
                         <Button
                           type="primary"
