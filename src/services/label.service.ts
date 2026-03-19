@@ -30,4 +30,32 @@ export const LabelService = {
     const response = await axiosInstance.delete(`/api/labels/${labelId}`);
     return response.data;
   },
+  requestLabel: async (payload: {
+    roundId: number;
+    labelName: string;
+    description?: string;
+  }) => {
+    const response = await axiosInstance.post("/api/labels/request", payload);
+    return response.data;
+  },
+  getPendingByProject: async (projectId: number) => {
+    const response = await axiosInstance.get(
+      `/api/labels/pending/project/${projectId}`,
+    );
+    return response.data;
+  },
+
+  approve: async (labelId: number) => {
+    const response = await axiosInstance.put(`/api/labels/${labelId}/approve`);
+    return response.data;
+  },
+
+  reject: async (labelId: number) => {
+    const response = await axiosInstance.put(`/api/labels/${labelId}/reject`);
+    return response.data;
+  },
+  getMyLabelRequest: async () => {
+    const response = await axiosInstance.get(`/api/labels/my-labels`);
+    return response.data;
+  },
 };
