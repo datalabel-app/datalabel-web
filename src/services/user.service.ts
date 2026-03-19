@@ -13,4 +13,14 @@ export const UserService = {
     const response = await axiosInstance.get("/api/User/reviewers");
     return response.data;
   },
+    changePassword: async (data: {
+    oldPassword: string;
+    newPassword: string;
+  }) => {
+    const response = await axiosInstance.post(
+      "/api/User/change-password",
+      data,
+    );
+    return response.data;
+  },
 };
