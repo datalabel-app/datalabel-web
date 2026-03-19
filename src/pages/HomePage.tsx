@@ -1,8 +1,11 @@
 import { Layout, Row, Col, Card, Button } from "antd";
+import { useNavigate } from "react-router-dom";
 
 const { Content } = Layout;
 
 const HomePage = () => {
+  const navigate = useNavigate();
+  const role = localStorage.getItem("role");
   return (
     <Layout style={{ background: "#fff" }}>
       <Content>
@@ -24,15 +27,16 @@ const HomePage = () => {
                 platform helps teams label images, text and video faster with
                 powerful tools.
               </p>
-
-              <Button
-                type="primary"
-                size="large"
-                style={{ marginTop: 30 }}
-                onClick={() => (window.location.href = "/projects")}
-              >
-                Start Labeling
-              </Button>
+              {Number(role) === 2 && (
+                <Button
+                  type="primary"
+                  size="large"
+                  style={{ marginTop: 30 }}
+                  onClick={() => navigate("/projects")}
+                >
+                  Start Labeling
+                </Button>
+              )}
             </Col>
 
             <Col span={12}>
@@ -207,14 +211,16 @@ const HomePage = () => {
             Manage projects, tasks and annotations in one platform.
           </p>
 
-          <Button
-            type="primary"
-            size="large"
-            style={{ marginTop: 30 }}
-            onClick={() => (window.location.href = "/projects")}
-          >
-            Go To Projects
-          </Button>
+          {Number(role) === 2 && (
+            <Button
+              type="primary"
+              size="large"
+              style={{ marginTop: 30 }}
+              onClick={() => (window.location.href = "/projects")}
+            >
+              Go To Projects
+            </Button>
+          )}
         </div>
       </Content>
     </Layout>
