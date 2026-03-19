@@ -9,44 +9,39 @@ import {
   Typography,
   Spin,
   message,
+  Pagination,
+  Tag,
+  DatePicker,
 } from "antd";
 import type { MenuProps } from "antd";
-import {
-  SearchOutlined,
-  PlusOutlined,
-  MoreOutlined,
-  FilterOutlined,
-  SortAscendingOutlined,
-} from "@ant-design/icons";
+import { SearchOutlined, PlusOutlined, MoreOutlined } from "@ant-design/icons";
 import "../styles/projects.css";
 import { useNavigate } from "react-router-dom";
 import { ProjectService } from "../services/project.service";
+import dayjs from "dayjs";
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
-interface Project {
-  projectId: number;
-  projectName: string;
-  description: string;
-  createdBy?: string;
-  createdAt?: string;
-}
+const PAGE_SIZE = 8;
 
 const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
 
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const [search, setSearch] = useState("");
+  // const [sortType, setSortType] = useState<"newest" | null>(null);
+  const [selectedDate, setSelectedDate] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // ================= FETCH =================
   const fetchProjects = async () => {
     try {
       setLoading(true);
-
-      const res = await ProjectService.getAll({});
-
+      const res = await ProjectService.getAll();
       setProjects(res || []);
-    } catch (error) {
-      console.error(error);
+    } catch {
       message.error("Failed to load projects");
     } finally {
       setLoading(false);
@@ -57,85 +52,158 @@ const ProjectsPage: React.FC = () => {
     fetchProjects();
   }, []);
 
-  const cardMenuItems: MenuProps["items"] = [
-    { key: "open", label: "Open" },
-    { key: "edit", label: "Edit" },
-    { key: "delete", label: "Delete" },
-  ];
+  // ================= FILTER + SORT =================
+  const filtered = projects.filter((p) => {
+    const matchName = p.projectName
+      ?.toLowerCase()
+      .includes(search.toLowerCase());
+
+    const matchDate = selectedDate
+      ? dayjs(p.createdAt).isSame(selectedDate, "day")
+      : true;
+
+    return matchName && matchDate;
+  });
+  // .sort((a, b) => {
+  //   if (sortType === "newest") {
+  //     return (
+  //       new Date(b.createdAt || 0).getTime() -
+  //       new Date(a.createdAt || 0).getTime()
+  //     );
+  //   }
+  //   return 0;
+  // });
+
+  // ================= PAGINATION =================
+  const paginatedData = filtered.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+
+  const handleDelete = async (id: number) => {
+    try {
+      await ProjectService.delete(id);
+      message.success("Deleted!");
+      fetchProjects();
+    } catch {
+      message.error("Delete failed");
+    }
+  };
+
+  const getMenu = (project: any): MenuProps => ({
+    items: [
+      {
+        key: "open",
+        label: "Open",
+        onClick: () => navigate(`/projects/${project.projectId}`),
+      },
+      {
+        key: "edit",
+        label: "Edit",
+        onClick: () => navigate(`/projects/${project.projectId}`),
+      },
+      {
+        key: "delete",
+        label: "Delete",
+        danger: true,
+        onClick: () => handleDelete(project.projectId),
+      },
+    ],
+  });
 
   return (
     <div className="projects-container">
-      {/* TOOLBAR */}
-      <div className="projects-toolbar">
-        <div className="toolbar-left">
-          <Input
-            placeholder="Search ..."
-            prefix={<SearchOutlined />}
-            className="search-input"
-          />
-          <Button type="link">Select all</Button>
-        </div>
+      {/* HEADER */}
+      <div className="projects-header">
+        <Title level={3}>Projects</Title>
 
-        <div className="toolbar-right">
-          <Button icon={<SortAscendingOutlined />}>Sort by</Button>
-          <Button icon={<FilterOutlined />}>Quick filters</Button>
-          <Button icon={<FilterOutlined />}>Filter</Button>
-          <Button type="link">Clear filters</Button>
-
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => navigate("/projects/create")}
-          />
-        </div>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => navigate("/projects/create")}
+        >
+          New Project
+        </Button>
       </div>
 
-      {/* PROJECT LIST */}
+      {/* TOOLBAR */}
+      <div className="projects-toolbar">
+        <Input
+          placeholder="Search project..."
+          prefix={<SearchOutlined />}
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setCurrentPage(1);
+          }}
+          className="search-input"
+        />
+
+        <DatePicker
+          placeholder="Filter by date"
+          onChange={(date) => {
+            setSelectedDate(date);
+            setCurrentPage(1);
+          }}
+        />
+      </div>
+
+      {/* CONTENT */}
       {loading ? (
-        <div style={{ textAlign: "center", marginTop: 100 }}>
+        <div className="center">
           <Spin size="large" />
         </div>
       ) : (
-        <Row gutter={[24, 24]}>
-          {projects.map((project) => (
-            <Col
-              key={project.projectId}
-              xs={24}
-              sm={12}
-              md={8}
-              lg={6}
-              onClick={() => navigate(`/projects/${project.projectId}`)}
-              style={{ cursor: "pointer" }}
-            >
-              <Card
-                className="project-card"
-                hoverable
-                cover={<div className="project-image-placeholder">📷</div>}
-              >
-                <div className="card-content">
-                  <div>
-                    <h4>{project.projectName}</h4>
+        <>
+          <Row gutter={[20, 20]}>
+            {paginatedData.map((project) => (
+              <Col xs={24} sm={12} md={8} lg={6} key={project.projectId}>
+                <Card
+                  className="project-card"
+                  hoverable
+                  onClick={() => navigate(`/projects/${project.projectId}`)}
+                >
+                  <div className="card-content">
+                    <div>
+                      <Title level={5} className="title">
+                        {project.projectName}
+                      </Title>
 
-                    <Text type="secondary">
-                      Created by {project.createdBy || "Unknown"}
-                    </Text>
-                    <br />
+                      <Text type="secondary">{project.description}</Text>
 
-                    <Text type="secondary">
-                      {project.createdAt
-                        ? new Date(project.createdAt).toLocaleDateString()
-                        : ""}
-                    </Text>
+                      <div className="meta">
+                        <Text type="secondary">
+                          {new Date(project.createdAt).toLocaleDateString()}
+                        </Text>
+                      </div>
+
+                      <div style={{ marginTop: 12 }}>
+                        <Tag color="blue">{project.datasetCount} datasets</Tag>
+                      </div>
+                    </div>
+
+                    <Dropdown menu={getMenu(project)} trigger={["click"]}>
+                      <MoreOutlined
+                        className="menu-icon"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </Dropdown>
                   </div>
+                </Card>
+              </Col>
+            ))}
+          </Row>
 
-                  <Dropdown menu={{ items: cardMenuItems }} trigger={["click"]}>
-                    <MoreOutlined className="card-menu-icon" />
-                  </Dropdown>
-                </div>
-              </Card>
-            </Col>
-          ))}
-        </Row>
+          {/* PAGINATION */}
+          <div className="pagination">
+            <Pagination
+              current={currentPage}
+              pageSize={PAGE_SIZE}
+              total={filtered.length}
+              onChange={(page) => setCurrentPage(page)}
+            />
+          </div>
+        </>
       )}
     </div>
   );
