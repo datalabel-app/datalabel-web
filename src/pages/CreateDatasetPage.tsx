@@ -24,7 +24,7 @@ import { DataItemService } from "../services/dataitem.service";
 import { UserService } from "../services/user.service";
 import { TasksService } from "../services/task.service";
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 const { Option } = Select;
 
 interface UploadedImage {

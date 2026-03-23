@@ -1,0 +1,17 @@
+.my-label-container {
+  padding: 24px;
+  background-color: #f5f7fb;
+  min-height: 100vh;
+}
+
+.my-label-card {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 300px;
+}
