@@ -39,7 +39,7 @@ const ProjectsPage: React.FC = () => {
   const fetchProjects = async () => {
     try {
       setLoading(true);
-      const res = await ProjectService.getAll();
+      const res = await ProjectService.getByManager();
       setProjects(res || []);
     } catch {
       message.error("Failed to load projects");
