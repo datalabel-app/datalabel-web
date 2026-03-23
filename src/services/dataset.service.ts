@@ -23,6 +23,11 @@ export const DatasetService = {
     return response.data;
   },
 
+  getTreeDatasetByProject: async (projectId: number) => {
+    const response = await axiosInstance.get(`/api/datasets/tree/${projectId}`);
+    return response.data;
+  },
+
   update: async (id: number, payload: any) => {
     const response = await axiosInstance.put(`/api/datasets/${id}`, payload);
     return response.data;
