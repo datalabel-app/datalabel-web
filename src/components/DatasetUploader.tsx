@@ -1,6 +1,6 @@
-import React from "react";
-import { Upload } from "antd";
-import type { UploadFile } from "antd/es/upload/interface";
+import React, { useEffect, useState } from "react";
+import { Upload, message } from "antd";
+import type { UploadFile, UploadFileStatus } from "antd/es/upload/interface";
 import { PlusOutlined } from "@ant-design/icons";
 
 interface Props {
@@ -9,15 +9,38 @@ interface Props {
 }
 
 const DatasetUploader: React.FC<Props> = ({ files, setFiles }) => {
-  const fileList: UploadFile[] = files.map((file, index) => ({
-    uid: index.toString(),
-    name: file.name,
-    status: "done",
-    url: URL.createObjectURL(file),
-  }));
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
 
-  const handleChange = ({ fileList }: any) => {
-    const newFiles = fileList.map((file: any) => file.originFileObj);
+  // Cập nhật fileList từ files
+  useEffect(() => {
+    const newList = files.map((file) => ({
+      uid: file.name + file.lastModified, // uid ổn định
+      name: file.name,
+      status: "done" as UploadFileStatus,
+      url: URL.createObjectURL(file),
+      originFileObj: file as any,
+    }));
+    setFileList(newList);
+
+    // Cleanup URL object khi unmount
+    return () => {
+      newList.forEach((f) => f.url && URL.revokeObjectURL(f.url));
+    };
+  }, [files]);
+
+  // Chỉ chấp nhận ảnh
+  const beforeUpload = (file: File) => {
+    const isImage = file.type.startsWith("image/");
+    if (!isImage) {
+      message.error(`${file.name} is not an image file`);
+    }
+    return isImage ? true : Upload.LIST_IGNORE; // LIST_IGNORE để bỏ file ra khỏi list
+  };
+
+  const handleChange = ({ fileList: newFileList }: any) => {
+    const newFiles = newFileList
+      .map((file: any) => file.originFileObj)
+      .filter(Boolean);
     setFiles(newFiles);
   };
 
@@ -25,9 +48,10 @@ const DatasetUploader: React.FC<Props> = ({ files, setFiles }) => {
     <Upload
       multiple
       listType="picture-card"
-      beforeUpload={() => false}
+      beforeUpload={beforeUpload}
       fileList={fileList}
       onChange={handleChange}
+      accept="image/*" // chỉ hiện chọn file ảnh
     >
       <div>
         <PlusOutlined />
