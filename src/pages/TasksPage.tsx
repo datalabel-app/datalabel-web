@@ -1,52 +1,46 @@
 import React, { useEffect, useState } from "react";
 import {
-  Input,
-  Card,
-  Row,
-  Col,
-  Space,
-  Typography,
-  Spin,
-  Empty,
-  message,
-  Button,
+  Table,
   Tag,
-  Progress,
+  Button,
+  Typography,
+  Input,
+  Spin,
+  message,
+  Card,
+  Space,
 } from "antd";
-import { SearchOutlined } from "@ant-design/icons";
+import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  EditOutlined,
+  EyeOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { TasksService } from "../services/task.service";
 
 const { Title, Text } = Typography;
 
-interface Round {
-  roundId: number;
-  roundNumber: number;
-  shapeType: number;
-  description: string;
-}
-
 interface Task {
   taskId: number;
-  dataItemId: number;
-  fileUrl: string;
+  roundName: string;
+  annotatorName: string;
+  reviewerName: string;
+  dataItemCount: number;
+  shapeType: number;
   status: number;
-  round: Round;
 }
 
 const TasksPage: React.FC = () => {
   const navigate = useNavigate();
+  const role = Number(localStorage.getItem("role"));
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
 
-  const role = Number(localStorage.getItem("role"));
-
-  // =========================
-  // LOAD TASKS
-  // =========================
-
+  // ================= LOAD =================
   const loadTasks = async () => {
     try {
       setLoading(true);
@@ -55,9 +49,7 @@ const TasksPage: React.FC = () => {
 
       if (role === 3) {
         data = await TasksService.getTasksByAnnotator();
-      }
-
-      if (role === 4) {
+      } else if (role === 4) {
         data = await TasksService.getTasksByReviewer();
       }
 
@@ -73,215 +65,172 @@ const TasksPage: React.FC = () => {
     loadTasks();
   }, []);
 
-  // =========================
-  // STATUS TAG
-  // =========================
+  // ================= FILTER =================
+  const filtered = tasks.filter((t) =>
+    t.roundName.toLowerCase().includes(search.toLowerCase()),
+  );
 
-  const getStatusTag = (status: number) => {
+  // ================= NAVIGATION =================
+  const goToTask = (task: Task) => {
+    if (role === 3) {
+      if (task.shapeType === 1) {
+        navigate(`/classification/${task.taskId}`);
+      } else {
+        navigate(`/annotate/${task.taskId}`);
+      }
+    }
+    if (role === 4) {
+      if (task.shapeType === 1) {
+        navigate(`/review/type/${task.taskId}`);
+      } else {
+        navigate(`/review/${task.taskId}`);
+      }
+    }
+  };
+
+  // ================= SHAPE TAG =================
+  const getShapeTag = (shapeType: number) => {
+    return shapeType === 1 ? (
+      <Tag color="blue">Classification</Tag>
+    ) : (
+      <Tag color="green">BBox</Tag>
+    );
+  };
+  const renderStatusTag = (status: number) => {
     switch (status) {
       case 0:
-        return <Tag color="orange">Pending</Tag>;
+        return (
+          <Tag icon={<ClockCircleOutlined />} color="default">
+            Pending
+          </Tag>
+        );
       case 1:
-        return <Tag color="blue">Annotating</Tag>;
+        return (
+          <Tag icon={<EditOutlined />} color="processing">
+            Annotating
+          </Tag>
+        );
       case 2:
-        return <Tag color="green">Approved</Tag>;
+        return (
+          <Tag icon={<EyeOutlined />} color="warning">
+            Review
+          </Tag>
+        );
       case 3:
-        return <Tag color="red">Rejected</Tag>;
+        return (
+          <Tag icon={<CheckCircleOutlined />} color="success">
+            Done
+          </Tag>
+        );
       default:
         return <Tag>Unknown</Tag>;
     }
   };
+  // ================= COLUMNS =================
+  const columns = [
+    {
+      title: "Task ID",
+      dataIndex: "taskId",
+      key: "taskId",
+      width: 100,
+    },
+    {
+      title: "Round",
+      dataIndex: "roundName",
+      key: "roundName",
+      render: (text: string) => <b>{text}</b>,
+    },
+    {
+      title: "Type",
+      dataIndex: "shapeType",
+      key: "shapeType",
+      render: (shapeType: number) => getShapeTag(shapeType),
+    },
+    {
+      title: "Annotator",
+      dataIndex: "annotatorName",
+      key: "annotatorName",
+      render: (text: string) => <Tag color="blue">{text || "Unassigned"}</Tag>,
+    },
+    {
+      title: "Reviewer",
+      dataIndex: "reviewerName",
+      key: "reviewerName",
+      render: (text: string) => (
+        <Tag color="purple">{text || "Unassigned"}</Tag>
+      ),
+    },
+    {
+      title: "Items",
+      dataIndex: "dataItemCount",
+      key: "dataItemCount",
+      render: (count: number) => <Tag color="gold">{count} items</Tag>,
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (status: number) => renderStatusTag(status),
+    },
+    {
+      title: "Action",
+      key: "action",
+      render: (_: any, record: Task) => (
+        <Button
+          type="primary"
+          disabled={record.status === 3}
+          onClick={() => goToTask(record)}
+        >
+          {record.status === 3
+            ? "Completed"
+            : role === 3
+              ? "Annotate"
+              : "Review"}
+        </Button>
+      ),
+    },
+  ];
 
-  // =========================
-  // NAVIGATE
-  // =========================
-
-  const handleAnnotate = (task: Task) => {
-    if (task.round.shapeType === 1) {
-      navigate(`/classification/${task.taskId}`);
-    } else {
-      navigate(`/annotate/${task.taskId}`);
-    }
-  };
-
-  // =========================
-  // FILTER
-  // =========================
-
-  const filtered = tasks.filter((t) =>
-    t.fileUrl?.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  // =========================
-  // GROUP TASKS BY ROUND
-  // =========================
-
-  const groupedTasks = filtered.reduce((acc: any, task) => {
-    const roundId = task.round.roundId;
-
-    if (!acc[roundId]) {
-      acc[roundId] = {
-        round: task.round,
-        tasks: [],
-      };
-    }
-
-    acc[roundId].tasks.push(task);
-
-    return acc;
-  }, {});
-
-  if (loading)
+  // ================= LOADING =================
+  if (loading) {
     return (
       <div style={{ textAlign: "center", padding: 50 }}>
         <Spin size="large" />
       </div>
     );
+  }
 
   return (
     <div style={{ padding: 24 }}>
-      <Title level={3}>
-        {role === 3 ? "My Annotation Tasks" : "My Review Tasks"}
-      </Title>
+      {/* TITLE */}
+      <Space direction="vertical" style={{ marginBottom: 20 }}>
+        <Title level={3}>
+          {role === 3 ? "My Annotation Tasks" : "My Review Tasks"}
+        </Title>
+        <Text type="secondary">Manage and process your assigned tasks</Text>
+      </Space>
 
       {/* SEARCH */}
+      <Card style={{ marginBottom: 20 }}>
+        <Input
+          placeholder="Search by round name..."
+          prefix={<SearchOutlined />}
+          style={{ width: 300 }}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </Card>
 
-      <Input
-        style={{ width: 300, marginBottom: 30 }}
-        placeholder="Search image..."
-        prefix={<SearchOutlined />}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
+      {/* TABLE */}
+      <Table
+        columns={columns}
+        dataSource={filtered.map((t) => ({
+          ...t,
+          key: t.taskId,
+        }))}
+        bordered
+        pagination={{ pageSize: 6 }}
       />
-
-      {filtered.length === 0 ? (
-        <Empty description="No tasks found" />
-      ) : (
-        Object.values(groupedTasks).map((group: any) => {
-          const total = group.tasks.length;
-
-          let done = 0;
-
-          // Annotator progress
-          if (role === 3) {
-            done = group.tasks.filter(
-              (t: Task) => t.status === 1 || t.status === 2 || t.status === 3,
-            ).length;
-          }
-
-          // Reviewer progress
-          if (role === 4) {
-            done = group.tasks.filter(
-              (t: Task) => t.status === 2 || t.status === 3,
-            ).length;
-          }
-
-          const percent = total === 0 ? 0 : Math.round((done / total) * 100);
-
-          return (
-            <div key={group.round.roundId} style={{ marginBottom: 50 }}>
-              {/* ROUND HEADER */}
-
-              <Card style={{ marginBottom: 20 }} bodyStyle={{ padding: 16 }}>
-                <Space direction="vertical" style={{ width: "100%" }}>
-                  <Title level={4} style={{ margin: 0 }}>
-                    Round {group.round.roundNumber}
-                  </Title>
-
-                  <Text type="secondary">{group.round.description}</Text>
-
-                  <Progress percent={percent} size="small" />
-
-                  <Text type="secondary">
-                    {done} / {total} {role === 3 ? "annotated" : "reviewed"}
-                  </Text>
-                </Space>
-              </Card>
-
-              {/* TASK GRID */}
-
-              <Row gutter={[16, 16]}>
-                {group.tasks.map((task: Task) => (
-                  <Col span={6} key={task.taskId}>
-                    <Card
-                      hoverable
-                      style={{
-                        borderRadius: 12,
-                        overflow: "hidden",
-                      }}
-                      cover={
-                        <img
-                          src={task.fileUrl}
-                          style={{
-                            height: 200,
-                            objectFit: "cover",
-                          }}
-                        />
-                      }
-                    >
-                      <Space direction="vertical" style={{ width: "100%" }}>
-                        {getStatusTag(task.status)}
-
-                        {/* ANNOTATOR */}
-
-                        {role === 3 && task.status === 0 && (
-                          <Button
-                            type="primary"
-                            block
-                            onClick={() => handleAnnotate(task)}
-                          >
-                            Start Annotation
-                          </Button>
-                        )}
-
-                        {role === 3 && task.status === 3 && (
-                          <Button
-                            type="primary"
-                            block
-                            onClick={() => handleAnnotate(task)}
-                          >
-                            Re-Annotate
-                          </Button>
-                        )}
-
-                        {role === 3 && task.status === 1 && (
-                          <Button block disabled>
-                            Waiting for Review
-                          </Button>
-                        )}
-
-                        {/* REVIEWER */}
-
-                        {role === 4 && task.status === 0 && (
-                          <Button block disabled>
-                            Waiting for Annotation
-                          </Button>
-                        )}
-
-                        {role === 4 && task.status === 1 && (
-                          <Button
-                            type="primary"
-                            block
-                            onClick={() => navigate(`/review/${task.taskId}`)}
-                          >
-                            Start Review
-                          </Button>
-                        )}
-
-                        {task.status === 2 && (
-                          <Button block disabled>
-                            Completed
-                          </Button>
-                        )}
-                      </Space>
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-            </div>
-          );
-        })
-      )}
     </div>
   );
 };
