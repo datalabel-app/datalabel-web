@@ -5,119 +5,240 @@ import {
   Button,
   Space,
   Row,
-  Col,
   Input,
   Empty,
   Spin,
   message,
   Modal,
   Form,
+  Tag,
+  Col,
 } from "antd";
 import {
   ArrowLeftOutlined,
-  EditOutlined,
   PlusOutlined,
   SearchOutlined,
+  EditOutlined,
+  RightOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
+
 import { ProjectService } from "../services/project.service";
+import { DatasetService } from "../services/dataset.service";
+import { LabelService } from "../services/label.service";
+
+import "../styles/project-detail.css";
 
 const { Title, Text } = Typography;
-
-interface Project {
-  projectId: number;
-  projectName: string;
-  description: string;
-}
-
-interface Dataset {
-  datasetId: number;
-  datasetName: string;
-  status: string;
-}
 
 const ProjectDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  const [project, setProject] = useState<Project | null>(null);
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [project, setProject] = useState<any>(null);
+  const [datasets, setDatasets] = useState<any[]>([]);
+  const [pendingLabels, setPendingLabels] = useState<any[]>([]);
+
   const [loading, setLoading] = useState(false);
+  const [loadingLabels, setLoadingLabels] = useState(false);
+  const [search, setSearch] = useState("");
 
   const [projectModal, setProjectModal] = useState(false);
   const [projectForm] = Form.useForm();
-
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [expandedKeys, setExpandedKeys] = useState<number[]>([]);
 
+  const toggleExpand = (id: number) => {
+    setExpandedKeys((prev) =>
+      prev.includes(id) ? prev.filter((key) => key !== id) : [...prev, id],
+    );
+  };
+  // ================= FETCH =================
   const fetchProject = async () => {
     try {
-      setLoading(true);
-
       const res = await ProjectService.getById(Number(id));
-
       setProject(res);
-      setDatasets(res.datasets || []);
     } catch {
       message.error("Failed to load project");
+    }
+  };
+
+  const fetchDatasets = async () => {
+    try {
+      setLoading(true);
+      const res = await DatasetService.getTreeDatasetByProject(Number(id));
+      setDatasets(res);
+    } catch {
+      message.error("Failed to load datasets");
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchPendingLabels = async () => {
+    try {
+      setLoadingLabels(true);
+      const res = await LabelService.getPendingByProject(Number(id));
+      setPendingLabels(res);
+    } catch {
+      message.error("Failed to load pending labels");
+    } finally {
+      setLoadingLabels(false);
+    }
+  };
+
   useEffect(() => {
-    if (id) fetchProject();
+    if (id) {
+      fetchProject();
+      fetchDatasets();
+      fetchPendingLabels();
+    }
   }, [id]);
 
+  // ================= UPDATE =================
   const handleUpdateProject = async (values: any) => {
     try {
       setSubmitLoading(true);
-
-      await ProjectService.update(project!.projectId, values);
-
-      message.success("Project updated");
-
+      await ProjectService.update(project.projectId, values);
+      message.success("Updated!");
       setProjectModal(false);
-
       fetchProject();
     } catch {
-      message.error("Update project failed");
+      message.error("Update failed");
     } finally {
       setSubmitLoading(false);
     }
   };
 
-  if (loading || !project) {
-    return (
-      <div style={{ textAlign: "center", marginTop: 120 }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
+  // ================= DELETE =================
+  const handleDeleteProject = () => {
+    Modal.confirm({
+      title: "Delete Project",
+      content: "Are you sure?",
+      okType: "danger",
+      onOk: async () => {
+        try {
+          await ProjectService.delete(project.projectId);
+          message.success("Deleted!");
+          navigate("/projects");
+        } catch {
+          message.error("Delete failed");
+        }
+      },
+    });
+  };
+
+  // ================= LABEL =================
+  const handleApprove = async (id: number) => {
+    await LabelService.approve(id);
+    message.success("Approved");
+    fetchPendingLabels();
+  };
+
+  const handleReject = async (id: number) => {
+    await LabelService.reject(id);
+    message.success("Rejected");
+    fetchPendingLabels();
+  };
+
+  // ================= SEARCH TREE =================
+  const filterTree = (data: any[]): any[] => {
+    return data
+      .map((item) => {
+        const children = filterTree(item.children || []);
+
+        if (
+          item.datasetName.toLowerCase().includes(search.toLowerCase()) ||
+          children.length > 0
+        ) {
+          return { ...item, children };
+        }
+
+        return null;
+      })
+      .filter(Boolean);
+  };
+
+  const filteredDatasets = search ? filterTree(datasets) : datasets;
+
+  // ================= RENDER TREE =================
+  const renderTree = (data: any[], level = 0) => {
+    return data.map((item) => {
+      const isExpanded = expandedKeys.includes(item.datasetId);
+      const hasChildren = item.children && item.children.length > 0;
+
+      return (
+        <div key={item.datasetId} style={{ marginLeft: level * 16 }}>
+          <Card
+            hoverable
+            style={{
+              marginBottom: 8,
+              borderLeft: `4px solid ${
+                level === 0 ? "#1677ff" : level === 1 ? "#52c41a" : "#faad14"
+              }`,
+              borderRadius: 8,
+            }}
+            onClick={() => navigate(`/datasets/${item.datasetId}`)}
+          >
+            <Row justify="space-between" align="middle">
+              <Space align="center">
+                {hasChildren && (
+                  <RightOutlined
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleExpand(item.datasetId);
+                    }}
+                    style={{
+                      fontSize: 20,
+                      color: "#666",
+                      cursor: "pointer",
+                      transition: "transform 0.25s ease",
+                      transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                    }}
+                  />
+                )}
+
+                <div style={{ cursor: "pointer" }}>
+                  <Title level={5} style={{ margin: 0 }}>
+                    📁 {item.datasetName}
+                  </Title>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {level === 0 ? "Root" : `Level ${level}`}
+                  </Text>
+                </div>
+              </Space>
+              <Tag color={item.status === "Active" ? "green" : "orange"}>
+                {item.status}
+              </Tag>
+            </Row>
+          </Card>
+
+          {/* 👇 CHỈ render khi expand */}
+          {hasChildren && isExpanded && renderTree(item.children, level + 1)}
+        </div>
+      );
+    });
+  };
+
+  if (!project) return <Spin />;
 
   return (
-    <div style={{ padding: 24 }}>
-      {/* BACK BUTTON */}
-
+    <div className="project-detail-container">
+      {/* BACK */}
       <Button
         type="link"
         icon={<ArrowLeftOutlined />}
         onClick={() => navigate("/projects")}
-        style={{ padding: 0 }}
       >
-        Back to projects
+        Back
       </Button>
 
-      {/* PROJECT INFO */}
-
-      <Card style={{ marginTop: 16 }}>
-        <Row justify="space-between" align="middle">
+      {/* PROJECT */}
+      <Card style={{ marginBottom: 20 }}>
+        <Row justify="space-between">
           <Space>
-            <Title level={4} style={{ margin: 0 }}>
-              {project.projectName}
-            </Title>
-
+            <Title level={4}>{project.projectName}</Title>
             <EditOutlined
-              style={{ cursor: "pointer" }}
               onClick={() => {
                 projectForm.setFieldsValue(project);
                 setProjectModal(true);
@@ -125,69 +246,79 @@ const ProjectDetailPage: React.FC = () => {
             />
           </Space>
 
-          <Button type="primary">Actions</Button>
+          <Button danger onClick={handleDeleteProject}>
+            Delete
+          </Button>
         </Row>
 
-        <Text type="secondary">Project #{project.projectId}</Text>
-
-        <Row justify="space-between" style={{ marginTop: 16 }}>
-          <Col span={16}>
-            <Text strong>Project description</Text>
-
-            <div style={{ marginTop: 8 }}>{project.description}</div>
-          </Col>
-        </Row>
+        <Text>{project.description}</Text>
       </Card>
 
-      {/* DATASET TOOLBAR */}
+      {/* TOOLBAR */}
+      <Row justify="space-between" style={{ marginBottom: 20 }}>
+        <Input
+          placeholder="Search dataset..."
+          prefix={<SearchOutlined />}
+          style={{ width: 300 }}
+          onChange={(e) => setSearch(e.target.value)}
+        />
 
-      <div style={{ marginTop: 24 }}>
-        <Row justify="space-between">
-          <Space>
-            <Input
-              placeholder="Search dataset..."
-              prefix={<SearchOutlined />}
-              style={{ width: 250 }}
-            />
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => navigate(`/projects/${id}/dataset`)}
+        >
+          Add Dataset
+        </Button>
+      </Row>
 
-            <Button type="link">Select all</Button>
-          </Space>
+      {/* TREE */}
+      {loading ? (
+        <Spin />
+      ) : filteredDatasets.length === 0 ? (
+        <Empty />
+      ) : (
+        renderTree(filteredDatasets)
+      )}
 
-          <Space>
-            <Button>Sort</Button>
-            <Button>Filter</Button>
+      {/* LABEL REQUEST */}
+      <div style={{ marginTop: 40 }}>
+        <Title level={4}>Pending Labels</Title>
 
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => navigate(`/projects/${id}/dataset/create`)}
-            >
-              Add Dataset
-            </Button>
-          </Space>
-        </Row>
-      </div>
-
-      {/* DATASET LIST */}
-
-      <div style={{ marginTop: 24 }}>
-        {datasets.length === 0 ? (
-          <Empty description="No datasets yet" />
+        {loadingLabels ? (
+          <Spin />
+        ) : pendingLabels.length === 0 ? (
+          <Empty />
         ) : (
           <Row gutter={[16, 16]}>
-            {datasets.map((dataset) => (
-              <Col span={8} key={dataset.datasetId}>
-                <Card
-                  hoverable
-                  onClick={() => navigate(`/datasets/${dataset.datasetId}`)}
-                >
-                  <Title level={5}>{dataset.datasetName}</Title>
+            {pendingLabels.map((item) => (
+              <Col span={8} key={item.labelId}>
+                <Card>
+                  <Space direction="vertical">
+                    <Title level={5}>{item.labelName}</Title>
 
-                  <Text type="secondary">Dataset #{dataset.datasetId}</Text>
+                    <Text type="secondary">
+                      Dataset: {item.dataset?.datasetName}
+                    </Text>
 
-                  <div style={{ marginTop: 12 }}>
-                    <Text>Status: {dataset.status}</Text>
-                  </div>
+                    <Text type="secondary">
+                      Round {item.round?.roundNumber}
+                    </Text>
+
+                    <Tag color="gold">Pending</Tag>
+
+                    <Space>
+                      <Button
+                        type="primary"
+                        onClick={() => handleApprove(item.labelId)}
+                      >
+                        Approve
+                      </Button>
+                      <Button danger onClick={() => handleReject(item.labelId)}>
+                        Reject
+                      </Button>
+                    </Space>
+                  </Space>
                 </Card>
               </Col>
             ))}
@@ -195,37 +326,23 @@ const ProjectDetailPage: React.FC = () => {
         )}
       </div>
 
-      {/* EDIT PROJECT MODAL */}
-
+      {/* MODAL */}
       <Modal
-        title="Edit Project"
         open={projectModal}
+        title="Edit Project"
         onCancel={() => setProjectModal(false)}
         footer={null}
       >
-        <Form
-          form={projectForm}
-          layout="vertical"
-          onFinish={handleUpdateProject}
-        >
-          <Form.Item
-            label="Project name"
-            name="projectName"
-            rules={[{ required: true }]}
-          >
-            <Input />
+        <Form form={projectForm} onFinish={handleUpdateProject}>
+          <Form.Item name="projectName" rules={[{ required: true }]}>
+            <Input placeholder="Project Name" />
           </Form.Item>
 
-          <Form.Item label="Description" name="description">
-            <Input.TextArea rows={4} />
+          <Form.Item name="description">
+            <Input.TextArea rows={3} />
           </Form.Item>
 
-          <Button
-            type="primary"
-            htmlType="submit"
-            loading={submitLoading}
-            block
-          >
+          <Button htmlType="submit" type="primary" loading={submitLoading}>
             Update
           </Button>
         </Form>

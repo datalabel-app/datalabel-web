@@ -16,10 +16,8 @@ export const ProjectService = {
     return response.data;
   },
 
-  getByManager: async (managerId: number) => {
-    const response = await axiosInstance.get(
-      `/api/projects/manager/${managerId}`,
-    );
+  getByManager: async () => {
+    const response = await axiosInstance.get(`/api/projects/my-projects`);
     return response.data;
   },
 
