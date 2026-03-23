@@ -33,4 +33,27 @@ export const AuthService = {
     );
     return response.data;
   },
+  exportTemplate: async () => {
+    const response = await axiosInstance.get("/api/Auth/export-template", {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  importUsers: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await axiosInstance.post(
+      "/api/Auth/import-users",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
+
+    return response.data;
+  },
 };
