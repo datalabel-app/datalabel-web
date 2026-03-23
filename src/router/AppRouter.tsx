@@ -22,6 +22,11 @@ const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
+        {/* TEST PAGE */}
+        <Route
+          path="/test"
+          element={<CreateDatasetPage/>}
+        />
         {/* LOGIN */}
         <Route
           path="/login"
