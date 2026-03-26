@@ -205,11 +205,12 @@ const TasksPage: React.FC = () => {
 
         const isCompleted = record.status === 3;
         const isReviewing = record.status === 2;
+        const isPending = record.status === 0;
 
         const disabled =
           isCompleted ||
           (role === 3 && record.status === 1) ||
-          (role === 4 && (isReviewing || isTaskCompletedForReviewer(record)));
+          (role === 4 && (isPending || isReviewing || isTaskCompletedForReviewer(record)));
 
         return (
           <Button
