@@ -12,9 +12,16 @@ import {
   Space,
   Select,
   Input,
+  Radio,
+  Col,
 } from "antd";
 
-import { ArrowLeftOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  ArrowLeftOutlined,
+  DownloadOutlined,
+  ExclamationCircleOutlined,
+  PlusOutlined,
+} from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { DataItemService } from "../services/dataitem.service";
@@ -23,18 +30,19 @@ import { TasksService } from "../services/task.service";
 import { UserService } from "../services/user.service";
 import { LabelService } from "../services/label.service";
 import { DatasetRoundService } from "../services/datasetround.service";
-
+import { saveAs } from "file-saver";
 const { Title } = Typography;
 
+const { confirm } = Modal;
 const DatasetDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { datasetId } = useParams();
 
   const [dataItems, setDataItems] = useState<any[]>([]);
   const [dataset, setDataset] = useState<any>(null);
-
-  const [loading, setLoading] = useState(false);
-
+  const [loadingData, setLoadingData] = useState(false);
+  const [loadingLabels, setLoadingLabels] = useState(false);
+  const [loadingCreate, setLoadingCreate] = useState(false);
   const [createModal, setCreateModal] = useState(false);
   const [annotators, setAnnotators] = useState<any[]>([]);
   const [reviewers, setReviewers] = useState<any[]>([]);
@@ -43,14 +51,24 @@ const DatasetDetailPage: React.FC = () => {
   const [selectedReviewer, setSelectedReviewer] = useState<number>();
 
   const [description, setDescription] = useState("");
-  const [labels, setLabels] = useState<string[]>([]);
+  const [labels, setLabels] = useState<any[]>([]);
+  const [selectedLabel, setSelectedLabel] = useState<number | null>(null);
+
   const [newLabel, setNewLabel] = useState("");
   const [shapeType, setShapeType] = useState<number>(0);
   const [creating, setCreating] = useState(false);
 
+  const [round, setRound] = useState<any>(null);
+
+  const [unassignedItems, setUnassignedItems] = useState<any[]>([]);
+  const [selectionMode, setSelectionMode] = useState<"all" | "number">("all");
+  const [numberInput, setNumberInput] = useState<number>(0);
+  const hasRound = !!round;
+
+  // ================= FETCH =================
   const fetchData = async () => {
     try {
-      setLoading(true);
+      setLoadingData(true);
 
       const datasetRes = await DatasetService.getById(Number(datasetId));
       const items = await DataItemService.getByDataset(Number(datasetId));
@@ -60,32 +78,93 @@ const DatasetDetailPage: React.FC = () => {
     } catch {
       message.error("Load dataset failed");
     } finally {
-      setLoading(false);
+      setLoadingData(false);
+    }
+  };
+  const fetchLabels = async () => {
+    try {
+      if (!datasetId) return;
+
+      setLoadingLabels(true);
+
+      setLabels([]);
+      setRound(null);
+
+      const datasetRes = await DatasetService.getById(Number(datasetId));
+      setDataset(datasetRes);
+
+      if (!datasetRes?.parentDatasetId) {
+        const labelsRes = await DatasetService.getLabelByDatasetRoot(
+          Number(datasetId),
+        );
+
+        setLabels(labelsRes || []);
+        return;
+      }
+
+      const roundRes = await DatasetRoundService.getByDataset(
+        Number(datasetId),
+      );
+
+      if (roundRes && roundRes.length > 0) {
+        const round = roundRes[0];
+        setRound(round);
+
+        setLabels(round.labels || []);
+      } else {
+        setLabels([]);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingLabels(false);
     }
   };
 
   useEffect(() => {
-    if (datasetId) fetchData();
+    if (!datasetId) return;
+
+    const load = async () => {
+      await Promise.all([fetchData(), fetchLabels()]);
+    };
+
+    load();
   }, [datasetId]);
 
+  // ================= CREATE TASK =================
   const handleCreateTask = async () => {
-    if (dataItems.length === 0) {
-      message.warning("Dataset không có item");
-      return;
-    }
-
     try {
-      const [annoRes, reviRes] = await Promise.all([
+      setLoadingCreate(true);
+      const [annoRes, reviRes, unassigned, roundRes] = await Promise.all([
         UserService.getAnnotator(),
         UserService.getReviewer(),
+        DataItemService.getByDatasetUnassigned(Number(datasetId)),
+        DatasetRoundService.getByDataset(Number(datasetId)),
       ]);
+
+      if (!unassigned.length) {
+        message.warning("No items remain unassigned.");
+        return;
+      }
 
       setAnnotators(annoRes || []);
       setReviewers(reviRes || []);
+      setUnassignedItems(unassigned);
+
+      if (roundRes && roundRes.length > 0) {
+        setRound(roundRes[0]);
+      } else {
+        setRound(null);
+      }
+
+      setSelectionMode("all");
+      setNumberInput(0);
 
       setCreateModal(true);
     } catch {
-      message.error("Load users failed");
+      message.error("Load data failed");
+    } finally {
+      setLoadingCreate(false);
     }
   };
 
@@ -95,61 +174,118 @@ const DatasetDetailPage: React.FC = () => {
     setNewLabel("");
   };
 
+  const getSelectedItems = () => {
+    if (selectionMode === "all") {
+      return unassignedItems.map((i) => i.itemId);
+    }
+
+    if (numberInput <= 0) return [];
+
+    return unassignedItems.slice(0, numberInput).map((i) => i.itemId);
+  };
+
   const handleSubmitCreateTask = async () => {
     if (!selectedAnnotator || !selectedReviewer) {
-      message.warning("Chọn annotator & reviewer");
+      message.warning("Choose annotator & reviewer");
+      return;
+    }
+
+    const selectedItems = getSelectedItems();
+
+    if (!selectedItems.length) {
+      message.warning("Empty Item select");
       return;
     }
 
     try {
       setCreating(true);
 
-      const allItemIds = dataItems.map((i) => i.itemId);
+      let roundId = round?.roundId;
 
-      const roundRes = await DatasetRoundService.create({
-        datasetId: Number(datasetId),
-        description: description,
-        roundNumber: 1,
-        shapeType: shapeType,
-      });
-
-      const roundId = roundRes.roundId;
-
-      for (const label of labels) {
-        await LabelService.create({
-          roundId: roundId,
-          labelName: label,
+      // 🔥 CREATE ROUND + LABEL + DATASET
+      if (!hasRound) {
+        const roundRes = await DatasetRoundService.create({
+          datasetId: Number(datasetId),
+          description: description,
+          roundNumber: 1,
+          shapeType: shapeType,
         });
+
+        roundId = roundRes.roundId;
+
+        // 🔥 FIX CHÍNH Ở ĐÂY
+        for (const label of labels) {
+          await LabelService.create({
+            roundId: roundId,
+            labelName: label,
+
+            // 👇 truyền thêm theo yêu cầu bạn
+            projectId: dataset?.project?.projectId,
+            parentDatasetId: dataset?.datasetId,
+          });
+        }
       }
 
       await TasksService.create({
         roundId: roundId,
         annotatorId: selectedAnnotator,
         reviewerId: selectedReviewer,
-        dataItemIds: allItemIds,
+        dataItemIds: selectedItems,
       });
 
-      message.success(`Tạo task cho ${allItemIds.length} items`);
+      message.success(`Create task for ${selectedItems.length} items`);
 
-      // reset
       setCreateModal(false);
-      setLabels([]);
+      fetchData();
     } catch {
-      message.error("Tạo task thất bại");
+      message.error("Create task fail");
     } finally {
       setCreating(false);
     }
   };
+  const handleDeleteDataset = async () => {
+    confirm({
+      title: "Confirm delete dataset",
+      icon: <ExclamationCircleOutlined />,
+      content: "Are you sure you want to delete this dataset?",
+      okText: "Delete",
+      okType: "danger",
+      cancelText: "Cancel",
+      async onOk() {
+        try {
+          await DatasetService.delete(Number(datasetId));
+          message.success("Delete dataset success");
+          navigate(-1);
+        } catch {
+          message.error("Delete dataset fail");
+        }
+      },
+    });
+  };
+  const renderFile = (url: string) => {
+    const ext = url.split(".").pop()?.toLowerCase();
 
+    if (["jpg", "jpeg", "png", "webp"].includes(ext || "")) {
+      return <img src={url} style={{ width: "10%", borderRadius: 10 }} />;
+    }
+
+    if (["mp4"].includes(ext || "")) {
+      return <video src={url} controls style={{ width: "10%" }} />;
+    }
+
+    if (["mp3"].includes(ext || "")) {
+      return <audio controls src={url} style={{ width: "100%" }} />;
+    }
+
+    return <Tag>Unsupported</Tag>;
+  };
+  const loading = loadingData || loadingLabels;
   // ================= TABLE =================
-
   const columns: any = [
     {
       title: "File",
       dataIndex: "fileUrl",
-      render: (url: string) => (
-        <img src={url} style={{ width: 90, height: 90, objectFit: "cover" }} />
-      ),
+      render: (url: string) => renderFile(url),
     },
   ];
 
@@ -159,31 +295,104 @@ const DatasetDetailPage: React.FC = () => {
         <Spin size="large" />
       </div>
     );
+  const handleExportDataset = async () => {
+    if (!datasetId) return;
 
+    const hide = message.loading("Exporting dataset...", 0);
+
+    try {
+      const data = await DatasetService.exportDataset(Number(datasetId));
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      saveAs(blob, `${dataset.datasetName || "dataset"}_export.json`);
+
+      message.success("Export success!");
+    } catch (error) {
+      console.error(error);
+      message.error("Export fail!");
+    } finally {
+      hide(); // hide loading
+    }
+  };
+  const handleLabelFilterChange = (labelId: number | null) => {
+    setSelectedLabel(labelId);
+
+    const selected = labels.find((l: any) => l.labelId === labelId);
+
+    if (selected?.datasetId) {
+      navigate(`/datasets/${selected.datasetId}`);
+      setSelectedLabel(null);
+    }
+
+    fetchData();
+  };
   return (
     <div style={{ padding: 24 }}>
-      <Button onClick={() => navigate(-1)} icon={<ArrowLeftOutlined />}>
+      <Button
+        onClick={() => navigate(`/projects/${dataset?.project?.projectId}`)}
+        icon={<ArrowLeftOutlined />}
+      >
         Back
       </Button>
 
       <Card style={{ marginTop: 10 }}>
         <Row justify="space-between">
           <Title level={4}>{dataset?.datasetName}</Title>
+          <Col style={{ display: "flex", gap: 12 }}>
+            {!dataset?.parentDatasetId && (
+              <Button
+                type="primary"
+                icon={<DownloadOutlined />}
+                style={{ backgroundColor: "#1890ff", borderColor: "#1890ff" }}
+                onClick={handleExportDataset}
+              >
+                Export Data
+              </Button>
+            )}
 
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreateTask}
-          >
-            Create Task
-          </Button>
+            <Button danger onClick={handleDeleteDataset}>
+              Delete Dataset
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreateTask}
+              loading={loadingCreate}
+            >
+              Create Task
+            </Button>
+          </Col>
         </Row>
+        <div style={{ marginTop: 16 }}>
+          <span>Filter by Label: </span>
+          {loadingLabels ? (
+            <Spin size="small" />
+          ) : (
+            <Select
+              key={datasetId}
+              placeholder="Select label"
+              allowClear
+              style={{ width: 200 }}
+              value={selectedLabel || undefined}
+              onChange={handleLabelFilterChange}
+            >
+              {labels.map((l) => (
+                <Select.Option key={l.labelId} value={l.labelId}>
+                  {l.labelName}
+                </Select.Option>
+              ))}
+            </Select>
+          )}
+        </div>
       </Card>
 
       <Card style={{ marginTop: 20 }}>
         <Table rowKey="itemId" columns={columns} dataSource={dataItems} />
       </Card>
 
+      {/* ================= MODAL ================= */}
       <Modal
         title="Create Task"
         open={createModal}
@@ -192,47 +401,81 @@ const DatasetDetailPage: React.FC = () => {
         confirmLoading={creating}
       >
         <Space direction="vertical" style={{ width: "100%" }}>
-          <div>
-            <div>Round Description</div>
+          {/* PICK */}
+          <Radio.Group
+            value={selectionMode}
+            onChange={(e) => setSelectionMode(e.target.value)}
+          >
+            <Radio value="all">Pick All</Radio>
+            <Radio value="number">Pick quantity</Radio>
+          </Radio.Group>
+
+          {selectionMode === "number" && (
             <Input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              type="number"
+              placeholder="Nhập số item"
+              value={numberInput}
+              onChange={(e) => setNumberInput(Number(e.target.value))}
             />
-          </div>
-          <div>
-            <div>Round Type</div>
-            <Select
-              style={{ width: "100%" }}
-              value={shapeType}
-              onChange={(value) => setShapeType(value)}
-            >
-              <Select.Option value={0}>Bounding Box</Select.Option>
-              <Select.Option value={1}>Classification</Select.Option>
-            </Select>
-          </div>
+          )}
 
-          <div>
-            <div>Labels</div>
-            <Space>
+          {/* ROUND VIEW */}
+          {hasRound ? (
+            <>
+              <div>
+                <b>Round Description:</b> {round.description}
+              </div>
+
+              <div>
+                <b>Labels:</b>
+                <div style={{ marginTop: 8 }}>
+                  {round.labels?.map((l: any) => (
+                    <Tag key={l.labelId}>{l.labelName}</Tag>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>Round Description</div>
               <Input
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
               />
-              <Button onClick={handleAddLabel}>Add</Button>
-            </Space>
 
-            <div style={{ marginTop: 10 }}>
-              {labels.map((l, i) => (
-                <Tag key={i}>{l}</Tag>
-              ))}
-            </div>
-          </div>
+              <div>Round Type</div>
+              <Select
+                style={{ width: "100%" }}
+                value={shapeType}
+                onChange={(value) => setShapeType(value)}
+              >
+                <Select.Option value={0}>Bounding Box</Select.Option>
+                <Select.Option value={1}>Classification</Select.Option>
+              </Select>
 
+              <div>Labels</div>
+              <Space>
+                <Input
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                />
+                <Button onClick={handleAddLabel}>Add</Button>
+              </Space>
+
+              <div style={{ marginTop: 10 }}>
+                {labels.map((l, i) => (
+                  <Tag key={i}>{l}</Tag>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* SELECT USER */}
           <div>
             <div>Annotator</div>
             <Select
-              style={{ width: "100%" }}
+              placeholder="Select annotator"
+              style={{ width: "100%", minHeight: 40 }}
               onChange={(v) => setSelectedAnnotator(v)}
             >
               {annotators.map((u) => (
@@ -246,7 +489,8 @@ const DatasetDetailPage: React.FC = () => {
           <div>
             <div>Reviewer</div>
             <Select
-              style={{ width: "100%" }}
+              placeholder="Select reviewer"
+              style={{ width: "100%", minHeight: 40 }}
               onChange={(v) => setSelectedReviewer(v)}
             >
               {reviewers.map((u) => (
@@ -258,7 +502,12 @@ const DatasetDetailPage: React.FC = () => {
           </div>
 
           <div>
-            <b>{dataItems.length}</b> items sẽ được tạo task
+            <b>
+              {selectionMode === "all"
+                ? unassignedItems.length
+                : Math.min(numberInput, unassignedItems.length)}
+            </b>{" "}
+            items sẽ được tạo task
           </div>
         </Space>
       </Modal>

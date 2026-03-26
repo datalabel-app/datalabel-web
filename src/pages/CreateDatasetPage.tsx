@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Card,
   Form,
@@ -9,8 +9,6 @@ import {
   Typography,
   Divider,
   Select,
-  Row,
-  Col,
 } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -21,8 +19,6 @@ import { DatasetRoundService } from "../services/datasetround.service";
 import { LabelService } from "../services/label.service";
 import { UploadService } from "../services/upload.service";
 import { DataItemService } from "../services/dataitem.service";
-import { UserService } from "../services/user.service";
-import { TasksService } from "../services/task.service";
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -39,19 +35,8 @@ const CreateDatasetPage: React.FC = () => {
   const [uploadType, setUploadType] = useState<"image" | "zip">("image");
   const [files, setFiles] = useState<File[]>([]);
   const [labels, setLabels] = useState<string[]>([]);
-  const [annotators, setAnnotators] = useState<any[]>([]);
-  const [reviewers, setReviewers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      const a = await UserService.getAnnotator();
-      const r = await UserService.getReviewer();
-      setAnnotators(a);
-      setReviewers(r);
-    };
-    fetchUsers();
-  }, []);
+  const [loading, setLoading] = useState(false);
 
   const addLabel = () => setLabels([...labels, ""]);
   const updateLabel = (index: number, value: string) => {
@@ -97,7 +82,12 @@ const CreateDatasetPage: React.FC = () => {
       // 3. LABEL
       await Promise.all(
         labels.map((label) =>
-          LabelService.create({ roundId, labelName: label }),
+          LabelService.create({
+            roundId,
+            labelName: label,
+            projectId: id,
+            parentDatasetId: datasetId,
+          }),
         ),
       );
 
@@ -115,8 +105,7 @@ const CreateDatasetPage: React.FC = () => {
         }));
       }
 
-      // 5. DATA ITEM
-      const createdItems = await Promise.all(
+      await Promise.all(
         images.map((img) =>
           DataItemService.create({
             datasetId,
@@ -125,16 +114,6 @@ const CreateDatasetPage: React.FC = () => {
           }),
         ),
       );
-
-      const dataItemIds = createdItems.map((i: any) => i.itemId);
-
-      // 6. TASK
-      await TasksService.create({
-        roundId,
-        annotatorId: values.annotatorId || null,
-        reviewerId: values.reviewerId || null,
-        dataItemIds,
-      });
 
       message.success("Created successfully 🚀");
       navigate(`/projects/${id}`);
@@ -160,21 +139,18 @@ const CreateDatasetPage: React.FC = () => {
             name="datasetName"
             rules={[{ required: true }]}
           >
-            <Input placeholder="Nhập tên dataset..." />
+            <Input placeholder="Input dataset name..." />
           </Form.Item>
 
           {/* ROUND */}
           <Divider orientation="horizontal" titlePlacement="left">Round Config</Divider>
 
           <Form.Item
-            label="Instruction (Mô tả công việc)"
+            label="Instruction (Description work)"
             name="description"
             rules={[{ required: true }]}
           >
-            <Input.TextArea
-              rows={3}
-              placeholder="Ví dụ: Vẽ bounding box quanh tất cả người"
-            />
+            <Input.TextArea rows={3} placeholder="Ex: Draw bounding box" />
           </Form.Item>
 
           <Form.Item label="Shape Type" name="shapeType" initialValue={0}>
@@ -203,35 +179,6 @@ const CreateDatasetPage: React.FC = () => {
               </Space>
             ))}
           </div>
-
-          {/* ASSIGN */}
-          <Divider orientation="horizontal" titlePlacement="left">Assign Task</Divider>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item label="Annotator" name="annotatorId">
-                <Select allowClear placeholder="Chọn người annotate">
-                  {annotators.map((u) => (
-                    <Option key={u.userId} value={u.userId}>
-                      {u.fullName}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Col>
-
-            <Col span={12}>
-              <Form.Item label="Reviewer" name="reviewerId">
-                <Select allowClear placeholder="Chọn người review">
-                  {reviewers.map((u) => (
-                    <Option key={u.userId} value={u.userId}>
-                      {u.fullName}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
 
           {/* UPLOAD */}
           <Divider orientation="horizontal" titlePlacement="left">Upload Data</Divider>
@@ -262,7 +209,7 @@ const CreateDatasetPage: React.FC = () => {
             block
             size="large"
           >
-            Create Dataset + Task
+            Create Dataset
           </Button>
         </Form>
       </Card>
