@@ -9,12 +9,23 @@ export const TasksService = {
     const response = await axiosInstance.get(`/api/tasks/round/${roundId}`);
     return response.data;
   },
-  getTasksByAnnotator: async () => {
-    const response = await axiosInstance.get(`/api/tasks/annotator/me`);
+  getTasksByAnnotator: async (search?: string, status?: number) => {
+    const params: any = {};
+    if (search) params.search = search;
+    if (status !== undefined) params.status = status;
+    const response = await axiosInstance.get(`/api/tasks/annotator/me`, {
+      params,
+    });
     return response.data;
   },
-  getTasksByReviewer: async () => {
-    const response = await axiosInstance.get(`/api/tasks/reviewer/me`);
+
+  getTasksByReviewer: async (search?: string, status?: number) => {
+    const params: any = {};
+    if (search) params.search = search;
+    if (status !== undefined) params.status = status;
+    const response = await axiosInstance.get(`/api/tasks/reviewer/me`, {
+      params,
+    });
     return response.data;
   },
   getTaskById: async (taskId: number) => {

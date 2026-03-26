@@ -15,10 +15,20 @@ export const DataItemService = {
     const response = await axiosInstance.get(`/api/dataitems/${id}`);
     return response.data;
   },
+  getByDataset: async (datasetId: number, labelId?: number) => {
+    const params: any = {};
+    if (labelId) params.labelId = labelId;
 
-  getByDataset: async (datasetId: number) => {
     const response = await axiosInstance.get(
       `/api/dataitems/dataset/${datasetId}`,
+      { params },
+    );
+
+    return response.data;
+  },
+  getByDatasetUnassigned: async (datasetId: number) => {
+    const response = await axiosInstance.get(
+      `/api/dataitems/dataset/${datasetId}/unassigned`,
     );
     return response.data;
   },

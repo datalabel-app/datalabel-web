@@ -133,6 +133,7 @@ const ProjectDetailPage: React.FC = () => {
     await LabelService.approve(id);
     message.success("Approved");
     fetchPendingLabels();
+    fetchProject();
   };
 
   const handleReject = async (id: number) => {
@@ -160,12 +161,28 @@ const ProjectDetailPage: React.FC = () => {
   };
 
   const filteredDatasets = search ? filterTree(datasets) : datasets;
-
+  const getShapeTypeTag = (shapeType: number | null) => {
+    if (shapeType === 0) {
+      return <Tag color="blue">BBox</Tag>;
+    }
+    if (shapeType === 1) {
+      return <Tag color="purple">Classification</Tag>;
+    }
+    return null;
+  };
   // ================= RENDER TREE =================
-  const renderTree = (data: any[], level = 0) => {
+  const renderTree = (
+    data: any[],
+    level = 0,
+    parentShapeType: number | null = null,
+  ) => {
     return data.map((item) => {
       const isExpanded = expandedKeys.includes(item.datasetId);
       const hasChildren = item.children && item.children.length > 0;
+      const inheritedShapeType =
+        item.shapeType !== null && item.shapeType !== undefined
+          ? item.shapeType
+          : parentShapeType;
 
       return (
         <div key={item.datasetId} style={{ marginLeft: level * 16 }}>
@@ -207,14 +224,22 @@ const ProjectDetailPage: React.FC = () => {
                   </Text>
                 </div>
               </Space>
-              <Tag color={item.status === "Active" ? "green" : "orange"}>
-                {item.status}
-              </Tag>
+
+              <Space>
+                {/* 👇 CHỈ HIỂN THỊ từ CHA */}
+                {getShapeTypeTag(parentShapeType)}
+
+                <Tag color={item.status === "Active" ? "green" : "orange"}>
+                  {item.status}
+                </Tag>
+              </Space>
             </Row>
           </Card>
 
-          {/* 👇 CHỈ render khi expand */}
-          {hasChildren && isExpanded && renderTree(item.children, level + 1)}
+          {/* 👇 truyền xuống */}
+          {hasChildren &&
+            isExpanded &&
+            renderTree(item.children, level + 1, inheritedShapeType)}
         </div>
       );
     });
@@ -302,7 +327,10 @@ const ProjectDetailPage: React.FC = () => {
                     </Text>
 
                     <Text type="secondary">
-                      Round {item.round?.roundNumber}
+                      Round {item.round?.description}
+                    </Text>
+                    <Text type="secondary">
+                      Annotator {item.annotator?.fullName}
                     </Text>
 
                     <Tag color="gold">Pending</Tag>
