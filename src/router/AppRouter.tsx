@@ -12,23 +12,23 @@ import ProjectDetailPage from "../pages/ProjectDetailPage";
 import AnnotationPage from "../pages/AnnotationPage";
 
 import PrivateRoute from "./PrivateRoute";
-import UserManagementPage from "../pages/UserManagementPage";
 import CreateDatasetPage from "../pages/CreateDatasetPage";
 import DatasetDetailPage from "../pages/DatasetDetailPage";
+import UserManagementPage from "../pages/UserManagementPage";
+import ClassificationPage from "../pages/ClassificationPage";
+import ReviewerPage from "../pages/ReviewerPage";
+import ReviewTypePage from "../pages/ReviewTypePage";
+import ChangePasswordPage from "../pages/ChangePasswordPage";
+import ManagerDashboard from "../pages/ManagerDashboard";
+import AdminDashboard from "../pages/AdminDashboard";
+import MyLabelRequests from "../pages/MyLabelRequests";
 
 const AppRouter: React.FC = () => {
-  const token = localStorage.getItem("token");
-
   return (
     <BrowserRouter>
       <Routes>
-        {/* LOGIN */}
-        <Route
-          path="/login"
-          element={!token ? <LoginPage /> : <Navigate to="/" />}
-        />
+        <Route path="/login" element={<LoginPage />} />
 
-        {/* HOME */}
         <Route
           path="/"
           element={
@@ -49,6 +49,16 @@ const AppRouter: React.FC = () => {
             </PrivateRoute>
           }
         />
+        <Route
+          path="/request-labels"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <MyLabelRequests />
+              </HomeLayout>
+            </PrivateRoute>
+          }
+        />
 
         {/* PROJECTS */}
         <Route
@@ -57,6 +67,27 @@ const AppRouter: React.FC = () => {
             <PrivateRoute>
               <HomeLayout>
                 <ProjectsPage />
+              </HomeLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dashboard-manager"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <ManagerDashboard />
+              </HomeLayout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/dashboard"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <AdminDashboard />
               </HomeLayout>
             </PrivateRoute>
           }
@@ -73,23 +104,20 @@ const AppRouter: React.FC = () => {
           }
         />
         <Route
-          path="/projects/:id"
-          element={
-            <PrivateRoute>
-              <HomeLayout>
-                <ProjectDetailPage />
-              </HomeLayout>
-            </PrivateRoute>
-          }
-        />
-        {/* DATASET */}
-        <Route
           path="/projects/:id/dataset"
           element={
             <PrivateRoute>
               <HomeLayout>
                 <CreateDatasetPage />
               </HomeLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/change-password"
+          element={
+            <PrivateRoute>
+              <ChangePasswordPage />
             </PrivateRoute>
           }
         />
@@ -103,7 +131,18 @@ const AppRouter: React.FC = () => {
             </PrivateRoute>
           }
         />
-        
+
+        <Route
+          path="/projects/:id"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <ProjectDetailPage />
+              </HomeLayout>
+            </PrivateRoute>
+          }
+        />
+
         {/* TASKS */}
         <Route
           path="/tasks"
@@ -118,11 +157,41 @@ const AppRouter: React.FC = () => {
 
         {/* ANNOTATION */}
         <Route
-          path="/annotate"
+          path="/classification/:taskId"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <ClassificationPage />
+              </HomeLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/annotate/:id"
           element={
             <PrivateRoute>
               <HomeLayout>
                 <AnnotationPage />
+              </HomeLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/review/:id"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <ReviewerPage />
+              </HomeLayout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/review/type/:id"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <ReviewTypePage />
               </HomeLayout>
             </PrivateRoute>
           }
