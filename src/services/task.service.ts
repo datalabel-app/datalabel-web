@@ -9,16 +9,42 @@ export const TasksService = {
     const response = await axiosInstance.get(`/api/tasks/round/${roundId}`);
     return response.data;
   },
-  getTasksByAnnotator: async () => {
-    const response = await axiosInstance.get(`/api/tasks/my-annotator-tasks`);
+  getTasksByAnnotator: async (search?: string, status?: number) => {
+    const params: any = {};
+    if (search) params.search = search;
+    if (status !== undefined) params.status = status;
+    const response = await axiosInstance.get(`/api/tasks/annotator/me`, {
+      params,
+    });
     return response.data;
   },
-  getTasksByReviewer: async () => {
-    const response = await axiosInstance.get(`/api/tasks/my-reviewer-tasks`);
+
+  getTasksByReviewer: async (search?: string, status?: number) => {
+    const params: any = {};
+    if (search) params.search = search;
+    if (status !== undefined) params.status = status;
+    const response = await axiosInstance.get(`/api/tasks/reviewer/me`, {
+      params,
+    });
     return response.data;
   },
   getTaskById: async (taskId: number) => {
     const response = await axiosInstance.get(`/api/tasks/${taskId}`);
+    return response.data;
+  },
+  getReviewTask: async (taskId: number) => {
+    const response = await axiosInstance.get(`/api/tasks/${taskId}/review`);
+    return response.data;
+  },
+  reviewBulk: async (payload: any) => {
+    const response = await axiosInstance.post(
+      `/api/tasks/review/bulk`,
+      payload,
+    );
+    return response.data;
+  },
+  delete: async (taskId: number) => {
+    const response = await axiosInstance.delete(`/api/tasks/${taskId}`);
     return response.data;
   },
   update: async (taskId: number, payload: any) => {

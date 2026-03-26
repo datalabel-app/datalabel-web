@@ -9,35 +9,41 @@ import {
   Space,
   Tag,
   Divider,
-  Alert,
+  List,
+  Progress,
   Modal,
   Input,
 } from "antd";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { TasksService } from "../services/task.service";
 import { LabelService } from "../services/label.service";
 import { AnnotationService } from "../services/annotation.service";
 
 const { Title, Text } = Typography;
 
-interface Task {
-  taskId: number;
+// ========================
+// TYPES
+// ========================
+
+interface DataItem {
+  itemId: number;
   fileUrl: string;
-  status: number;
-  descriptionError?: string;
+  status: string;
 
-  round: {
-    roundId: number;
-    roundNumber: number;
-    shapeType: number;
-    description: string;
-  };
+  annotationId?: number;
+  labelId?: number;
 
-  annotation?: {
-    annotationId: number;
-    labelId: number;
-    classification: string;
-  };
+  reviewStatus?: string;
+  reviewComment?: string;
+  errorMessage?: string;
+}
+
+interface TaskDetail {
+  taskId: number;
+  roundId: number;
+  roundName: string;
+  shapeType: number;
+  dataItems: DataItem[];
 }
 
 interface Label {
@@ -45,19 +51,31 @@ interface Label {
   labelName: string;
 }
 
+// ========================
+// COMPONENT
+// ========================
+
 const ClassificationPage: React.FC = () => {
   const { taskId } = useParams();
   const navigate = useNavigate();
 
-  const [task, setTask] = useState<Task | null>(null);
+  const [task, setTask] = useState<TaskDetail | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
   const [loading, setLoading] = useState(false);
-  const [label, setLabel] = useState<number | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newLabel, setNewLabel] = useState("");
-  const [loadingRequest, setLoadingRequest] = useState(false);
+
+  const [currentItem, setCurrentItem] = useState<DataItem | null>(null);
+  const [requestModalVisible, setRequestModalVisible] = useState(false);
+  const [requestLabelName, setRequestLabelName] = useState("");
+  const [requesting, setRequesting] = useState(false);
+  const [annotations, setAnnotations] = useState<{
+    [key: number]: {
+      labelId: number;
+      annotationId?: number;
+    };
+  }>({});
+
   // ========================
-  // LOAD TASK
+  // LOAD DATA
   // ========================
 
   const loadTask = async () => {
@@ -65,90 +83,195 @@ const ClassificationPage: React.FC = () => {
       setLoading(true);
 
       const data = await TasksService.getTaskById(Number(taskId));
-
       setTask(data);
 
-      if (data.annotation) {
-        setLabel(data.annotation.labelId);
+      if (data.dataItems.length > 0) {
+        setCurrentItem(data.dataItems[0]);
       }
 
-      const labelData = await LabelService.getByRound(data.round.roundId);
+      // sync annotation từ BE
+      const map: any = {};
+      data.dataItems.forEach((item: any) => {
+        if (item.labelId !== undefined && item.labelId !== null) {
+          map[item.itemId] = {
+            labelId: item.labelId,
+            annotationId: item.annotationId,
+          };
+        }
+      });
+
+      setAnnotations(map);
+
+      const labelData = await LabelService.getByRound(data.roundId);
       setLabels(labelData);
     } catch {
-      message.error("Cannot load task");
+      message.error("Load failed");
     } finally {
       setLoading(false);
     }
   };
-  const handleRequestLabel = async () => {
-    if (!newLabel.trim()) {
-      message.warning("Please enter label name");
-      return;
-    }
 
-    if (!task) return;
-
-    try {
-      setLoadingRequest(true);
-
-      await LabelService.requestLabel({
-        roundId: task.round.roundId,
-        labelName: newLabel.trim(),
-      });
-
-      message.success("Request sent! Waiting for approval");
-
-      setNewLabel("");
-      setIsModalOpen(false);
-
-      const labelData = await LabelService.getByRound(task.round.roundId);
-      setLabels(labelData);
-    } catch (error: any) {
-      const errMsg =
-        error?.response?.data?.message || error?.message || "Request failed";
-
-      message.error(errMsg);
-    } finally {
-      setLoadingRequest(false);
-    }
-  };
   useEffect(() => {
     loadTask();
   }, []);
 
-  const handleSubmit = async () => {
-    if (!label || !task) {
-      message.warning("Please choose a label");
+  // ========================
+  // SELECT LABEL
+  // ========================
+
+  const handleSelectLabel = (value: number) => {
+    if (!currentItem || !task) return;
+
+    if (currentItem.reviewStatus === "Approved") return;
+
+    setAnnotations((prev) => ({
+      ...prev,
+      [currentItem.itemId]: {
+        labelId: value,
+        annotationId: prev[currentItem.itemId]?.annotationId,
+      },
+    }));
+
+    // auto next
+    const index = task.dataItems.findIndex(
+      (i) => i.itemId === currentItem.itemId,
+    );
+
+    if (index < task.dataItems.length - 1) {
+      setTimeout(() => {
+        setCurrentItem(task.dataItems[index + 1]);
+      }, 200);
+    }
+  };
+
+  // ========================
+  // RENDER FILE
+  // ========================
+
+  const renderFile = (url: string) => {
+    const ext = url.split(".").pop()?.toLowerCase();
+
+    if (["jpg", "jpeg", "png", "webp"].includes(ext || "")) {
+      return <img src={url} style={{ width: "40%", borderRadius: 10 }} />;
+    }
+
+    if (["mp4"].includes(ext || "")) {
+      return <video src={url} controls style={{ width: "40%" }} />;
+    }
+
+    if (["mp3"].includes(ext || "")) {
+      return <audio controls src={url} style={{ width: "100%" }} />;
+    }
+
+    return <Tag>Unsupported</Tag>;
+  };
+
+  // ========================
+  // PROGRESS (FIX CHUẨN)
+  // ========================
+
+  const total = task?.dataItems.length || 0;
+
+  const done =
+    task?.dataItems.filter((item) => {
+      // Approved auto done
+      if (item.reviewStatus === "Approved") return true;
+
+      const annotation = annotations[item.itemId];
+
+      return annotation && annotation.labelId;
+    }).length || 0;
+
+  const percent = total ? Math.round((done / total) * 100) : 0;
+
+  // ========================
+  // SUBMIT
+  // ========================
+
+  const handleSubmitAll = async () => {
+    if (!task) return;
+
+    if (done !== total) {
+      message.warning("Bạn chưa annotate hết!");
       return;
     }
 
     try {
       setLoading(true);
-      if (task.annotation) {
-        await AnnotationService.update(task.annotation.annotationId, {
-          labelId: label,
-          classification: label.toString(),
-        });
 
-        message.success("Annotation updated");
-      } else {
-        await AnnotationService.create({
+      const createItems: any[] = [];
+      const updateItems: any[] = [];
+
+      task.dataItems.forEach((item) => {
+        // ❌ bỏ qua approved
+        if (item.reviewStatus === "Approved") return;
+
+        const state = annotations[item.itemId];
+
+        // ❌ chưa chọn label thì bỏ
+        if (!state?.labelId) return;
+
+        const payloadItem = {
+          itemId: item.itemId,
+          labelId: state.labelId,
+          classification: state.labelId.toString(),
+        };
+
+        // 🔥 CASE 1: BE trả annotationId dạng phẳng
+        if (item.annotationId) {
+          updateItems.push({
+            ...payloadItem,
+            annotationId: item.annotationId,
+          });
+          return;
+        }
+
+        // 🔥 CASE 2: BE trả annotations[]
+        const annotationFromBE = (item as any).annotations?.[0];
+
+        if (annotationFromBE?.annotationId) {
+          updateItems.push({
+            ...payloadItem,
+            annotationId: annotationFromBE.annotationId,
+          });
+        } else {
+          createItems.push(payloadItem);
+        }
+      });
+
+      console.log("CREATE ITEMS", createItems);
+      console.log("UPDATE ITEMS", updateItems);
+
+      // 🔥 CALL API
+      if (createItems.length > 0) {
+        await AnnotationService.bulkCreateClassfication({
           taskId: task.taskId,
-          roundId: task.round.roundId,
-          labelId: label,
-          classification: label.toString(),
+          roundId: task.roundId,
+          items: createItems,
         });
-
-        message.success("Annotation submitted");
       }
 
+      if (updateItems.length > 0) {
+        await AnnotationService.updateBulk({
+          taskId: task.taskId,
+          roundId: task.roundId,
+          items: updateItems,
+        });
+      }
+
+      message.success("Submit success!");
       navigate("/tasks");
-    } catch {
+    } catch (err) {
+      console.error(err);
       message.error("Submit failed");
     } finally {
       setLoading(false);
     }
   };
+
+  // ========================
+  // UI
+  // ========================
 
   if (loading || !task)
     return (
@@ -156,139 +279,210 @@ const ClassificationPage: React.FC = () => {
         <Spin size="large" />
       </div>
     );
+  const renderThumbnail = (url: string) => {
+    const ext = url.split(".").pop()?.toLowerCase();
+
+    if (["jpg", "jpeg", "png", "webp"].includes(ext || "")) {
+      return (
+        <img
+          src={url}
+          style={{
+            width: 60,
+            height: 60,
+            objectFit: "cover",
+            borderRadius: 6,
+          }}
+        />
+      );
+    }
+
+    if (["mp4", "webm"].includes(ext || "")) {
+      return (
+        <video src={url} style={{ width: 60, height: 60, borderRadius: 6 }} />
+      );
+    }
+
+    if (["mp3", "wav"].includes(ext || "")) {
+      return <audio src={url} controls style={{ width: 120 }} />;
+    }
+
+    return <Tag>File</Tag>;
+  };
 
   return (
-    <div
-      style={{
-        padding: 40,
-        maxWidth: 1000,
-        margin: "auto",
-      }}
-    >
-      <Title level={3}>Image Classification</Title>
-
-      <Card
+    <div style={{ padding: 30 }}>
+      {/* HEADER */}
+      <div
         style={{
-          borderRadius: 12,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 20,
         }}
       >
-        <Space direction="vertical" style={{ width: "100%" }} size="large">
-          {/* IMAGE */}
+        <div>
+          <Title level={3}>Task #{task.taskId}</Title>
+          <Text>
+            {done}/{total} completed
+          </Text>
+        </div>
 
-          {(() => {
-            const url = task.fileUrl;
-            const ext = url?.split(".").pop()?.toLowerCase();
-
-            const isImage = ["jpg", "jpeg", "png", "webp"].includes(ext || "");
-            const isVideo = ["mp4", "mov", "avi"].includes(ext || "");
-            const isAudio = ["mp3", "wav"].includes(ext || "");
-
-            if (isImage) {
-              return (
-                <img
-                  src={url}
-                  style={{
-                    width: "100%",
-                    borderRadius: 10,
-                    border: "1px solid #eee",
-                  }}
-                />
-              );
-            }
-
-            if (isVideo) {
-              return (
-                <video
-                  src={url}
-                  controls
-                  style={{
-                    width: "100%",
-                    borderRadius: 10,
-                  }}
-                />
-              );
-            }
-
-            if (isAudio) {
-              return (
-                <audio controls style={{ width: "100%" }}>
-                  <source src={url} />
-                </audio>
-              );
-            }
-
-            return <Tag color="default">Unsupported file</Tag>;
-          })()}
-
-          {/* TASK INFO */}
-
-          <Space>
-            <Tag color="blue">Round {task.round.roundNumber}</Tag>
-            <Tag color="purple">Classification</Tag>
-          </Space>
-
-          <Text type="secondary">{task.round.description}</Text>
-
-          {/* ERROR FROM REVIEWER */}
-
-          {task.descriptionError && (
-            <Alert
-              message="Reviewer Feedback"
-              description={task.descriptionError}
-              type="error"
-              showIcon
-            />
-          )}
-
-          <Divider />
-
-          {/* LABEL SELECT */}
-
-          <Title level={5}>Select Label</Title>
-          <Button size="small" onClick={() => setIsModalOpen(true)}>
+        <div>
+          <Button
+            type="primary"
+            onClick={handleSubmitAll}
+            disabled={done !== total}
+          >
+            Submit
+          </Button>
+          <Button
+            type="dashed"
+            style={{ marginLeft: 10 }}
+            onClick={() => setRequestModalVisible(true)}
+          >
             Request Label
           </Button>
-          <Radio.Group value={label} onChange={(e) => setLabel(e.target.value)}>
-            <Space direction="vertical">
-              {labels.map((item) => (
-                <Radio
-                  key={item.labelId}
-                  value={item.labelId}
+        </div>
+      </div>
+
+      <Progress percent={percent} />
+
+      <div style={{ display: "flex", gap: 20, marginTop: 20 }}>
+        {/* LEFT */}
+        <Card style={{ width: 320 }}>
+          <List
+            dataSource={task.dataItems}
+            renderItem={(item) => {
+              const annotation = annotations[item.itemId];
+              const hasAnnotated = !!annotation?.labelId;
+
+              const review = item.reviewStatus?.toLowerCase();
+
+              const isApproved = review === "approved";
+              const isRejected = review === "rejected";
+
+              return (
+                <List.Item
+                  onClick={() => setCurrentItem(item)}
                   style={{
-                    padding: "6px 10px",
-                    borderRadius: 6,
+                    cursor: "pointer",
+                    background:
+                      currentItem?.itemId === item.itemId ? "#e6f4ff" : "",
+                    border: isRejected ? "1px solid red" : "",
                   }}
                 >
-                  {item.labelName}
-                </Radio>
-              ))}
+                  <Space>
+                    {renderThumbnail(item.fileUrl)}
+
+                    <div>
+                      <Text>Item #{item.itemId}</Text>
+                      <br />
+
+                      <Tag
+                        color={
+                          isApproved
+                            ? "green"
+                            : isRejected
+                              ? "red"
+                              : hasAnnotated
+                                ? "blue"
+                                : "default"
+                        }
+                      >
+                        {isApproved
+                          ? "Approved"
+                          : isRejected
+                            ? "Rejected"
+                            : hasAnnotated
+                              ? "Annotated"
+                              : "Pending"}
+                      </Tag>
+                    </div>
+                  </Space>
+                </List.Item>
+              );
+            }}
+          />
+        </Card>
+
+        {/* RIGHT */}
+        <Card style={{ flex: 1 }}>
+          {currentItem && (
+            <Space direction="vertical" style={{ width: "100%" }}>
+              {renderFile(currentItem.fileUrl)}
+
+              <Divider />
+
+              <Radio.Group
+                disabled={currentItem.reviewStatus === "Approved"}
+                value={annotations[currentItem.itemId]?.labelId}
+                onChange={(e) => handleSelectLabel(e.target.value)}
+              >
+                <Space direction="vertical">
+                  {labels.map((l) => (
+                    <Radio key={l.labelId} value={l.labelId}>
+                      {l.labelName}
+                    </Radio>
+                  ))}
+                </Space>
+              </Radio.Group>
+
+              {currentItem.reviewStatus && (
+                <>
+                  <Divider />
+                  <Tag
+                    color={
+                      currentItem.reviewStatus === "Approved" ? "green" : "red"
+                    }
+                  >
+                    {currentItem.reviewStatus}
+                  </Tag>
+                  <Text>{currentItem.reviewComment}</Text>
+                </>
+              )}
             </Space>
-          </Radio.Group>
+          )}
+        </Card>
+        <Modal
+          title="Request New Label"
+          open={requestModalVisible}
+          onCancel={() => setRequestModalVisible(false)}
+          onOk={async () => {
+            if (!requestLabelName.trim()) {
+              message.warning("Input label ");
+              return;
+            }
 
-          <Divider />
+            try {
+              setRequesting(true);
+              await LabelService.requestLabel({
+                roundId: task!.roundId,
+                labelName: requestLabelName.trim(),
+              });
+              message.success(`Requested label: ${requestLabelName}`);
 
-          {/* SUBMIT */}
+              const updatedLabels = await LabelService.getByRound(
+                task!.roundId,
+              );
+              setLabels(updatedLabels);
 
-          <Button type="primary" size="large" block onClick={handleSubmit}>
-            {task.annotation ? "Update Annotation" : "Submit Annotation"}
-          </Button>
-        </Space>
-      </Card>
-      <Modal
-        title="Request New Label"
-        open={isModalOpen}
-        onCancel={() => setIsModalOpen(false)}
-        onOk={handleRequestLabel}
-        confirmLoading={loadingRequest}
-        okText="Send Request"
-      >
-        <Input
-          placeholder="Enter label name (e.g. Cat, Dog...)"
-          value={newLabel}
-          onChange={(e) => setNewLabel(e.target.value)}
-        />
-      </Modal>
+              setRequestLabelName("");
+              setRequestModalVisible(false);
+            } catch (err) {
+              console.error(err);
+              message.error("Request label failed");
+            } finally {
+              setRequesting(false);
+            }
+          }}
+          confirmLoading={requesting}
+        >
+          <Input
+            placeholder="Enter new label"
+            value={requestLabelName}
+            onChange={(e) => setRequestLabelName(e.target.value)}
+          />
+        </Modal>
+      </div>
     </div>
   );
 };

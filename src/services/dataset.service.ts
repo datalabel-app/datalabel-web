@@ -23,6 +23,11 @@ export const DatasetService = {
     return response.data;
   },
 
+  getTreeDatasetByProject: async (projectId: number) => {
+    const response = await axiosInstance.get(`/api/datasets/tree/${projectId}`);
+    return response.data;
+  },
+
   update: async (id: number, payload: any) => {
     const response = await axiosInstance.put(`/api/datasets/${id}`, payload);
     return response.data;
@@ -30,6 +35,18 @@ export const DatasetService = {
 
   delete: async (id: number) => {
     const response = await axiosInstance.delete(`/api/datasets/${id}`);
+    return response.data;
+  },
+  exportDataset: async (datasetId: number) => {
+    const response = await axiosInstance.get(
+      `/api/datasets/export/${datasetId}`,
+    );
+    return response.data;
+  },
+  getLabelByDatasetRoot: async (datasetId: number) => {
+    const response = await axiosInstance.get(
+      `/api/datasets/${datasetId}/labels`,
+    );
     return response.data;
   },
 };

@@ -3,39 +3,36 @@ import {
   Table,
   Tag,
   Button,
-  Progress,
   Typography,
   Input,
   Spin,
   message,
+  Card,
+  Space,
   Select,
 } from "antd";
-import { SearchOutlined } from "@ant-design/icons";
+import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  EditOutlined,
+  EyeOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { TasksService } from "../services/task.service";
+import { REVIEW_STATUS } from "../constants/review-status";
 
-const { Title } = Typography;
-const { Option } = Select;
-
-interface Dataset {
-  datasetId: number;
-  datasetName: string;
-}
-
-interface Round {
-  roundId: number;
-  roundNumber: number;
-  shapeType: number;
-  description: string;
-}
+const { Title, Text } = Typography;
 
 interface Task {
   taskId: number;
-  dataItemId: number;
-  fileUrl: string;
+  roundName: string;
+  annotatorName: string;
+  reviewerName: string;
+  dataItemCount: number;
+  shapeType: number;
   status: number;
-  round: Round;
-  dataset: Dataset;
+  items?: any[];
 }
 
 const TasksPage: React.FC = () => {
@@ -45,18 +42,27 @@ const TasksPage: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<number | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 500);
 
-  // ========================= LOAD TASKS =========================
-  const loadTasks = async () => {
+    // cleanup nếu user gõ tiếp
+    return () => clearTimeout(handler);
+  }, [search]);
+  // ================= LOAD =================
+  // ================= LOAD =================
+  const loadTasks = async (searchValue = "", statusValue?: number) => {
     try {
       setLoading(true);
+
       let data: Task[] = [];
 
       if (role === 3) {
-        data = await TasksService.getTasksByAnnotator();
+        data = await TasksService.getTasksByAnnotator(searchValue, statusValue);
       } else if (role === 4) {
-        data = await TasksService.getTasksByReviewer();
+        data = await TasksService.getTasksByReviewer(searchValue, statusValue);
       }
 
       setTasks(data || []);
@@ -68,227 +74,210 @@ const TasksPage: React.FC = () => {
   };
 
   useEffect(() => {
-    loadTasks();
-  }, []);
+    loadTasks(debouncedSearch);
+  }, [debouncedSearch]);
 
-  // ========================= STATUS TAG =========================
-  const getStatusTag = (status: number) => {
+  // ================= FILTER =================
+  const filtered = tasks.filter((t) =>
+    t.roundName.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  // ================= NAVIGATION =================
+  const goToTask = (task: Task) => {
+    if (role === 3) {
+      if (task.shapeType === 1) {
+        navigate(`/classification/${task.taskId}`);
+      } else {
+        navigate(`/annotate/${task.taskId}`);
+      }
+    }
+    if (role === 4) {
+      if (task.shapeType === 1) {
+        navigate(`/review/type/${task.taskId}`);
+      } else {
+        navigate(`/review/${task.taskId}`);
+      }
+    }
+  };
+
+  // ================= SHAPE TAG =================
+  const getShapeTag = (shapeType: number) => {
+    return shapeType === 1 ? (
+      <Tag color="blue">Classification</Tag>
+    ) : (
+      <Tag color="green">BBox</Tag>
+    );
+  };
+  const renderStatusTag = (status: number) => {
     switch (status) {
       case 0:
-        return <Tag color="orange">Pending</Tag>;
+        return (
+          <Tag icon={<ClockCircleOutlined />} color="default">
+            Pending
+          </Tag>
+        );
       case 1:
-        return <Tag color="blue">Annotating</Tag>;
+        return (
+          <Tag icon={<EditOutlined />} color="processing">
+            Annotating
+          </Tag>
+        );
       case 2:
-        return <Tag color="green">Approved</Tag>;
+        return (
+          <Tag icon={<EyeOutlined />} color="warning">
+            Review
+          </Tag>
+        );
       case 3:
-        return <Tag color="red">Rejected</Tag>;
+        return (
+          <Tag icon={<CheckCircleOutlined />} color="success">
+            Done
+          </Tag>
+        );
       default:
         return <Tag>Unknown</Tag>;
     }
   };
 
-  // ========================= NAVIGATION =========================
-  const handleAnnotate = (task: Task) => {
-    if (task.round.shapeType === 1) {
-      navigate(`/classification/${task.taskId}`);
-    } else {
-      navigate(`/annotate/${task.taskId}`);
-    }
-  };
-
-  const handleReview = (task: Task) => {
-    if (task.round.shapeType === 1) {
-      navigate(`/review/type/${task.taskId}`);
-    } else {
-      navigate(`/review/${task.taskId}`);
-    }
-  };
-
-  // ========================= GROUP BY ROUND =========================
-  const groupedTasks = tasks.reduce((acc: any, task) => {
-    const roundId = task.round.roundId;
-    if (!acc[roundId]) {
-      acc[roundId] = {
-        round: task.round,
-        tasks: [],
-      };
-    }
-    acc[roundId].tasks.push(task);
-    return acc;
-  }, {});
-
-  // ========================= FILTER =========================
-  const filteredGroups = Object.values(groupedTasks)
-    .map((group: any) => {
-      let filteredTasks = group.tasks;
-
-      // ================= SEARCH BY DATASET NAME =================
-      if (search.trim()) {
-        filteredTasks = filteredTasks.filter((t: Task) =>
-          t.dataset?.datasetName.toLowerCase().includes(search.toLowerCase()),
-        );
-      }
-
-      // ================= STATUS FILTER =================
-      if (statusFilter !== null) {
-        filteredTasks = filteredTasks.filter(
-          (t: any) => t.status === statusFilter,
-        );
-      }
-
-      return { ...group, tasks: filteredTasks };
-    })
-    .filter((group) => group.tasks.length > 0);
-
-  // ========================= TABLE DATA =========================
-  const tableData = filteredGroups.map((group: any) => {
-    const total = group.tasks.length;
-    const done =
-      role === 3
-        ? group.tasks.filter((t: Task) => [1, 2, 3].includes(t.status)).length
-        : group.tasks.filter((t: Task) => [2, 3].includes(t.status)).length;
-
-    return {
-      key: group.round.roundId,
-      roundNumber: group.round.roundNumber,
-      description: group.round.description,
-      datasetName: group.tasks[0]?.dataset?.datasetName,
-      totalTasks: total,
-      doneTasks: done,
-      tasks: group.tasks,
-    };
-  });
-
-  // ========================= TABLE COLUMNS =========================
+  // ================= COLUMNS =================
   const columns = [
-    { title: "Dataset", dataIndex: "datasetName", key: "dataset" },
-    { title: "Round", dataIndex: "roundNumber", key: "round" },
-    { title: "Description", dataIndex: "description", key: "description" },
     {
-      title: "Progress",
-      key: "progress",
-      render: (_: any, record: any) => (
-        <Progress
-          percent={Math.round((record.doneTasks / record.totalTasks) * 100)}
-          size="small"
-        />
+      title: "Task ID",
+      dataIndex: "taskId",
+      key: "taskId",
+      width: 100,
+    },
+    {
+      title: "Round",
+      dataIndex: "roundName",
+      key: "roundName",
+      render: (text: string) => <b>{text}</b>,
+    },
+    {
+      title: "Dataset Name",
+      dataIndex: "datasetName",
+      key: "datasetName",
+      render: (text: string) => <b>{text}</b>,
+    },
+    {
+      title: "Type",
+      dataIndex: "shapeType",
+      key: "shapeType",
+      render: (shapeType: number) => getShapeTag(shapeType),
+    },
+    {
+      title: "Annotator",
+      dataIndex: "annotatorName",
+      key: "annotatorName",
+      render: (text: string) => <Tag color="blue">{text || "Unassigned"}</Tag>,
+    },
+    {
+      title: "Reviewer",
+      dataIndex: "reviewerName",
+      key: "reviewerName",
+      render: (text: string) => (
+        <Tag color="purple">{text || "Unassigned"}</Tag>
       ),
+    },
+    {
+      title: "Items",
+      dataIndex: "dataItemCount",
+      key: "dataItemCount",
+      render: (count: number) => <Tag color="gold">{count} items</Tag>,
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (status: number) => renderStatusTag(status),
+    },
+    {
+      title: "Action",
+      key: "action",
+      render: (_: any, record: Task) => {
+        const isTaskCompletedForReviewer = (record: Task) => {
+          return record.items?.every(
+            (i: any) =>
+              i.reviewStatus === REVIEW_STATUS.APPROVED ||
+              i.reviewStatus === REVIEW_STATUS.REJECTED,
+          );
+        };
+
+        const isCompleted = record.status === 3;
+        const isReviewing = record.status === 2;
+
+        const disabled =
+          isCompleted ||
+          (role === 3 && record.status === 1) ||
+          (role === 4 && (isReviewing || isTaskCompletedForReviewer(record)));
+
+        return (
+          <Button
+            type="primary"
+            disabled={disabled}
+            onClick={() => goToTask(record)}
+          >
+            {isCompleted || (role === 4 && isTaskCompletedForReviewer(record))
+              ? "Completed"
+              : role === 3
+                ? "Annotate"
+                : "Review"}
+          </Button>
+        );
+      },
     },
   ];
 
-  // ========================= LOADING =========================
-  if (loading)
+  // ================= LOADING =================
+  if (loading) {
     return (
       <div style={{ textAlign: "center", padding: 50 }}>
         <Spin size="large" />
       </div>
     );
+  }
 
   return (
     <div style={{ padding: 24 }}>
-      <Title level={3}>
-        {role === 3 ? "My Annotation Tasks" : "My Review Tasks"}
-      </Title>
+      {/* TITLE */}
+      <Space direction="vertical" style={{ marginBottom: 20 }}>
+        <Title level={3}>
+          {role === 3 ? "My Annotation Tasks" : "My Review Tasks"}
+        </Title>
+        <Text type="secondary">Manage and process your assigned tasks</Text>
+      </Space>
 
-      <div style={{ marginBottom: 20, display: "flex", gap: 16 }}>
+      {/* SEARCH */}
+      <Card style={{ marginBottom: 20 }}>
         <Input
-          style={{ width: 300 }}
-          placeholder="Search by dataset name..."
+          placeholder="Search by round name..."
           prefix={<SearchOutlined />}
+          style={{ width: 300 }}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-
         <Select
-          style={{ width: 200 }}
-          placeholder="Filter by Status"
+          style={{ width: 180, marginLeft: 12 }}
+          placeholder="Filter by status"
           allowClear
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value ?? null)}
+          onChange={(value) => loadTasks(search, value)}
         >
-          <Option value={0}>Pending</Option>
-          <Option value={1}>Annotating</Option>
-          <Option value={2}>Approved</Option>
-          <Option value={3}>Rejected</Option>
+          <Select.Option value={0}>Pending</Select.Option>
+          <Select.Option value={1}>Annotating</Select.Option>
+          <Select.Option value={2}>Review</Select.Option>
+          <Select.Option value={3}>Done</Select.Option>
         </Select>
-      </div>
+      </Card>
 
+      {/* TABLE */}
       <Table
         columns={columns}
-        dataSource={tableData}
-        expandable={{
-          expandedRowRender: (record) => (
-            <Table
-              columns={[
-                { title: "Task ID", dataIndex: "taskId", key: "taskId" },
-                {
-                  title: "Status",
-                  dataIndex: "status",
-                  key: "status",
-                  render: (status: number) => getStatusTag(status),
-                },
-                {
-                  title: "Action",
-                  key: "action",
-                  render: (_: any, task: Task) => {
-                    if (role === 3) {
-                      if (task.status === 2) {
-                        return (
-                          <Button type="primary" disabled>
-                            Done
-                          </Button>
-                        );
-                      }
-                      if (task.status === 1) {
-                        return (
-                          <Button type="primary" disabled>
-                            Waiting Review
-                          </Button>
-                        );
-                      }
-                      return (
-                        <Button
-                          type="primary"
-                          onClick={() => handleAnnotate(task)}
-                        >
-                          Annotate
-                        </Button>
-                      );
-                    } else {
-                      if (task.status === 2) {
-                        return (
-                          <Button type="primary" disabled>
-                            Done
-                          </Button>
-                        );
-                      }
-                      if (task.status === 3) {
-                        return (
-                          <Button type="primary" disabled>
-                            Waiting Annotating
-                          </Button>
-                        );
-                      }
-                      return (
-                        <Button
-                          type="primary"
-                          onClick={() => handleReview(task)}
-                        >
-                          Review
-                        </Button>
-                      );
-                    }
-                  },
-                },
-              ]}
-              dataSource={record.tasks.map((t: Task) => ({
-                ...t,
-                key: t.taskId,
-              }))}
-              pagination={false}
-            />
-          ),
-        }}
+        dataSource={filtered.map((t) => ({
+          ...t,
+          key: t.taskId,
+        }))}
+        bordered
+        pagination={{ pageSize: 6 }}
       />
     </div>
   );
