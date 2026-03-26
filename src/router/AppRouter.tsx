@@ -21,12 +21,10 @@ import ManagerDashboard from "../pages/ManagerDashboard";
 import AdminDashboard from "../pages/AdminDashboard";
 import MyLabelRequests from "../pages/MyLabelRequests";
 
-
 const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/test" element={<MyLabelRequests />} />
         <Route path="/login" element={<LoginPage />} />
 
         <Route
@@ -103,7 +101,6 @@ const AppRouter: React.FC = () => {
             </PrivateRoute>
           }
         />
-
         <Route
           path="/projects/:id/dataset"
           element={
@@ -177,7 +174,7 @@ const AppRouter: React.FC = () => {
             </PrivateRoute>
           }
         />
-
+        
         {/* PROFILE */}
         <Route
           path="/profile"

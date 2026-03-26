@@ -15,7 +15,7 @@ export const useNotification = () => {
     const token = localStorage.getItem("token");
 
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`https://datalabel.site/hub/notifications`, {
+      .withUrl(`http://localhost:5245/hub/notifications`, {
         accessTokenFactory: () => token!,
       })
       .withAutomaticReconnect()
