@@ -41,9 +41,8 @@ const LoginPage: React.FC = () => {
         navigate("/");
       }
     } catch (error: any) {
-      message.error(
-        error?.response?.data?.message || "Your account has been banned.",
-      );
+      console.log({ error });
+      message.error(error?.response?.data || "Login Failed");
     } finally {
       setLoading(false);
     }

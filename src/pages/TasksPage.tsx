@@ -9,6 +9,7 @@ import {
   message,
   Card,
   Space,
+  Select,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -19,6 +20,7 @@ import {
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { TasksService } from "../services/task.service";
+import { REVIEW_STATUS } from "../constants/review-status";
 
 const { Title, Text } = Typography;
 
@@ -39,18 +41,27 @@ const TasksPage: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 500);
 
+    // cleanup nếu user gõ tiếp
+    return () => clearTimeout(handler);
+  }, [search]);
   // ================= LOAD =================
-  const loadTasks = async () => {
+  // ================= LOAD =================
+  const loadTasks = async (searchValue = "", statusValue?: number) => {
     try {
       setLoading(true);
 
       let data: Task[] = [];
 
       if (role === 3) {
-        data = await TasksService.getTasksByAnnotator();
+        data = await TasksService.getTasksByAnnotator(searchValue, statusValue);
       } else if (role === 4) {
-        data = await TasksService.getTasksByReviewer();
+        data = await TasksService.getTasksByReviewer(searchValue, statusValue);
       }
 
       setTasks(data || []);
@@ -62,8 +73,8 @@ const TasksPage: React.FC = () => {
   };
 
   useEffect(() => {
-    loadTasks();
-  }, []);
+    loadTasks(debouncedSearch);
+  }, [debouncedSearch]);
 
   // ================= FILTER =================
   const filtered = tasks.filter((t) =>
@@ -126,6 +137,7 @@ const TasksPage: React.FC = () => {
         return <Tag>Unknown</Tag>;
     }
   };
+
   // ================= COLUMNS =================
   const columns = [
     {
@@ -138,6 +150,12 @@ const TasksPage: React.FC = () => {
       title: "Round",
       dataIndex: "roundName",
       key: "roundName",
+      render: (text: string) => <b>{text}</b>,
+    },
+    {
+      title: "Dataset Name",
+      dataIndex: "datasetName",
+      key: "datasetName",
       render: (text: string) => <b>{text}</b>,
     },
     {
@@ -175,19 +193,36 @@ const TasksPage: React.FC = () => {
     {
       title: "Action",
       key: "action",
-      render: (_: any, record: Task) => (
-        <Button
-          type="primary"
-          disabled={record.status === 3}
-          onClick={() => goToTask(record)}
-        >
-          {record.status === 3
-            ? "Completed"
-            : role === 3
-              ? "Annotate"
-              : "Review"}
-        </Button>
-      ),
+      render: (_: any, record: Task) => {
+        const isTaskCompletedForReviewer = (record: Task) => {
+          return record.items?.every(
+            (i: any) =>
+              i.reviewStatus === REVIEW_STATUS.APPROVED ||
+              i.reviewStatus === REVIEW_STATUS.REJECTED,
+          );
+        };
+
+        const isCompleted = record.status === 3;
+
+        const disabled =
+          isCompleted ||
+          (role === 3 && record.status === 1) ||
+          (role === 4 && isTaskCompletedForReviewer(record));
+
+        return (
+          <Button
+            type="primary"
+            disabled={disabled}
+            onClick={() => goToTask(record)}
+          >
+            {isCompleted || (role === 4 && isTaskCompletedForReviewer(record))
+              ? "Completed"
+              : role === 3
+                ? "Annotate"
+                : "Review"}
+          </Button>
+        );
+      },
     },
   ];
 
@@ -219,6 +254,17 @@ const TasksPage: React.FC = () => {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <Select
+          style={{ width: 180, marginLeft: 12 }}
+          placeholder="Filter by status"
+          allowClear
+          onChange={(value) => loadTasks(search, value)}
+        >
+          <Select.Option value={0}>Pending</Select.Option>
+          <Select.Option value={1}>Annotating</Select.Option>
+          <Select.Option value={2}>Review</Select.Option>
+          <Select.Option value={3}>Done</Select.Option>
+        </Select>
       </Card>
 
       {/* TABLE */}

@@ -5,35 +5,41 @@ import {
   Rect,
   Image as KonvaImage,
   Text as KonvaText,
-  Transformer,
 } from "react-konva";
 import useImage from "use-image";
 import { v4 as uuidv4 } from "uuid";
+
 import {
   Layout,
   Button,
   Select,
   List,
-  Typography,
   Space,
-  Card,
   Tag,
+  Tooltip,
   message,
+  Modal,
+  Input,
 } from "antd";
+
 import {
   DragOutlined,
   BorderOutlined,
   AimOutlined,
   DeleteOutlined,
-  SaveOutlined,
+  LeftOutlined,
+  RightOutlined,
+  ZoomInOutlined,
+  ZoomOutOutlined,
 } from "@ant-design/icons";
+
 import { useNavigate, useParams } from "react-router-dom";
+
 import { TasksService } from "../services/task.service";
 import { AnnotationService } from "../services/annotation.service";
 import { LabelService } from "../services/label.service";
 
-const { Sider, Content } = Layout;
-const { Text } = Typography;
+const { Sider, Content, Header } = Layout;
 
 interface Box {
   id: string;
@@ -42,76 +48,129 @@ interface Box {
   width: number;
   height: number;
   label: string;
+  labelId: number;
+  annotationId?: number; // 🔥 thêm
 }
 
 type ToolMode = "select" | "draw" | "move";
 
+const COLORS = [
+  "#ff4d4f",
+  "#1890ff",
+  "#52c41a",
+  "#faad14",
+  "#722ed1",
+  "#eb2f96",
+];
+
 const AnnotationPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [imageUrl, setImageUrl] = useState("");
-  const [image] = useImage(imageUrl);
 
   const [task, setTask] = useState<any>(null);
   const [labels, setLabels] = useState<any[]>([]);
 
-  const [boxes, setBoxes] = useState<Box[]>([]);
-  const [drawing, setDrawing] = useState(false);
-  const [newBox, setNewBox] = useState<Box | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentItem, setCurrentItem] = useState<any>(null);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedLabel, setSelectedLabel] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [image] = useImage(imageUrl);
+
+  const [boxes, setBoxes] = useState<Box[]>([]);
+  const [deletedAnnotationIds, setDeletedAnnotationIds] = useState<number[]>(
+    [],
+  ); // 🔥
+
+  const [newBox, setNewBox] = useState<Box | null>(null);
+  const [drawing, setDrawing] = useState(false);
 
   const [tool, setTool] = useState<ToolMode>("draw");
+  const [selectedLabel, setSelectedLabel] = useState("");
+
+  const [scale, setScale] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
 
   const stageRef = useRef<any>(null);
-  const transformerRef = useRef<any>(null);
 
-  /* ================= LOAD TASK ================= */
-
+  const isRejected = currentItem?.reviewStatus === "Rejected";
+  const isApproved = currentItem?.reviewStatus === "Approved";
+  const [requestModalVisible, setRequestModalVisible] = useState(false);
+  const [requestLabelName, setRequestLabelName] = useState("");
+  const [requesting, setRequesting] = useState(false);
+  /* ================= LOAD ================= */
   useEffect(() => {
-    const loadTask = async () => {
-      try {
-        const res = await TasksService.getTaskById(Number(id));
+    const load = async () => {
+      const res = await TasksService.getTaskById(Number(id));
+      setTask(res);
 
-        setTask(res);
-        setImageUrl(res.fileUrl);
+      const labelRes = await LabelService.getByRound(res.roundId);
+      setLabels(labelRes);
+      setSelectedLabel(labelRes[0]?.labelName);
 
-        const labelRes = await LabelService.getByRound(res.round.roundId);
-
-        setLabels(labelRes);
-
-        if (labelRes.length) setSelectedLabel(labelRes[0].labelName);
-      } catch {
-        message.error("Cannot load task");
-      }
+      setCurrentItem(res.dataItems[0]);
+      setImageUrl(res.dataItems[0].fileUrl);
     };
-
-    if (id) loadTask();
+    if (id) load();
   }, [id]);
 
-  const labelColors: Record<string, string> = {};
+  /* ================= LOAD ITEM ================= */
+  useEffect(() => {
+    if (!task) return;
 
-  labels.forEach((l, i) => {
-    const colors = ["#22c55e", "#3b82f6", "#f97316", "#ef4444"];
-    labelColors[l.labelName] = colors[i % colors.length];
-  });
+    const item = task.dataItems[currentIndex];
+    setCurrentItem(item);
+    setImageUrl(item.fileUrl);
+
+    // reset deleted list khi chuyển ảnh
+    setDeletedAnnotationIds([]);
+
+    if (item.annotations) {
+      const parsed = item.annotations.map((ann: any) => {
+        const c = JSON.parse(ann.coordinates);
+        return {
+          id: c.id || uuidv4(),
+          x: c.x,
+          y: c.y,
+          width: c.width,
+          height: c.height,
+          label: c.label,
+          labelId: c.labelId,
+          annotationId: ann.annotationId, // 🔥 quan trọng
+        };
+      });
+      setBoxes(parsed);
+    } else {
+      setBoxes([]);
+    }
+  }, [currentIndex, task]);
+
+  /* ================= AUTO FIT ================= */
+  useEffect(() => {
+    if (!image) return;
+
+    const maxW = window.innerWidth - 500;
+    const maxH = window.innerHeight - 200;
+
+    const ratio = Math.min(maxW / image.width, maxH / image.height);
+
+    setScale(ratio);
+    setPos({ x: 20, y: 20 });
+  }, [image]);
 
   /* ================= DRAW ================= */
-
-  const getRelativePointerPosition = () => {
+  const getPointer = () => {
     const stage = stageRef.current;
     const transform = stage.getAbsoluteTransform().copy();
     transform.invert();
-    const pos = stage.getPointerPosition();
-    return transform.point(pos);
+    return transform.point(stage.getPointerPosition());
   };
 
   const handleMouseDown = (e: any) => {
-    if (tool !== "draw") return;
+    if (tool !== "draw" || isApproved) return;
     if (e.target.getClassName() === "Rect") return;
 
-    const pos = getRelativePointerPosition();
+    const pos = getPointer();
+    const label = labels.find((l) => l.labelName === selectedLabel);
 
     setDrawing(true);
     setNewBox({
@@ -121,13 +180,13 @@ const AnnotationPage: React.FC = () => {
       width: 0,
       height: 0,
       label: selectedLabel,
+      labelId: label?.labelId,
     });
   };
 
   const handleMouseMove = () => {
     if (!drawing || !newBox) return;
-
-    const pos = getRelativePointerPosition();
+    const pos = getPointer();
 
     setNewBox({
       ...newBox,
@@ -141,10 +200,10 @@ const AnnotationPage: React.FC = () => {
 
     const fixed = {
       ...newBox,
-      x: newBox.width < 0 ? newBox.x + newBox.width : newBox.x,
-      y: newBox.height < 0 ? newBox.y + newBox.height : newBox.y,
       width: Math.abs(newBox.width),
       height: Math.abs(newBox.height),
+      x: newBox.width < 0 ? newBox.x + newBox.width : newBox.x,
+      y: newBox.height < 0 ? newBox.y + newBox.height : newBox.y,
     };
 
     if (fixed.width > 5 && fixed.height > 5) {
@@ -155,90 +214,85 @@ const AnnotationPage: React.FC = () => {
     setNewBox(null);
   };
 
-  /* ================= DELETE ================= */
+  /* ================= DELETE BOX ================= */
+  const handleDeleteBox = (box: Box) => {
+    if (box.annotationId) {
+      setDeletedAnnotationIds((prev) => [...prev, box.annotationId!]);
+    }
 
-  const deleteSelected = () => {
-    if (!selectedId) return;
-
-    setBoxes((prev) => prev.filter((b) => b.id !== selectedId));
-    setSelectedId(null);
+    setBoxes((prev) => prev.filter((b) => b.id !== box.id));
   };
 
-  /* ================= SAVE ================= */
+  /* ================= COLOR ================= */
+  const getColor = (labelId: number) => {
+    return COLORS[labelId % COLORS.length];
+  };
 
-  const handleSave = async () => {
-    if (!task) return;
+  const reloadCurrentItem = async () => {
+    const res = await TasksService.getTaskById(Number(id));
+    setTask(res);
+
+    const item = res.dataItems[currentIndex];
+
+    setCurrentItem(item);
+    setImageUrl(item.fileUrl);
+
+    if (item.annotations) {
+      const parsed = item.annotations.map((ann: any) => {
+        const c = JSON.parse(ann.coordinates);
+        return {
+          id: c.id || uuidv4(),
+          x: c.x,
+          y: c.y,
+          width: c.width,
+          height: c.height,
+          label: c.label,
+          labelId: c.labelId,
+          annotationId: ann.annotationId,
+        };
+      });
+
+      setBoxes(parsed);
+    } else {
+      setBoxes([]);
+    }
+
+    setDeletedAnnotationIds([]);
+  };
+  const handleSubmit = async () => {
     try {
-      for (const box of boxes) {
-        const label = labels.find((l) => l.labelName === box.label);
+      await Promise.all(
+        deletedAnnotationIds.map((id) => AnnotationService.delete(id)),
+      );
 
-        await AnnotationService.annotation({
-          taskId: task.taskId,
-          itemId: task.itemId,
-          roundId: task.round.roundId,
-          labelId: label.labelId,
-          shapeType: "bbox",
-          coordinates: JSON.stringify({
-            x: box.x,
-            y: box.y,
-            width: box.width,
-            height: box.height,
+      const newBoxes = boxes.filter((b) => !b.annotationId);
+
+      await Promise.all(
+        newBoxes.map((box) =>
+          AnnotationService.annotation({
+            taskId: task.taskId,
+            itemId: currentItem.itemId,
+            roundId: task.roundId,
+            labelId: box.labelId,
+            shapeType: "bbox",
+            coordinates: JSON.stringify(box),
           }),
-        });
-      }
+        ),
+      );
 
-      message.success("Annotation saved");
-      navigate("/tasks");
-    } catch {
+      message.success("Saved");
+      await reloadCurrentItem();
+      setDeletedAnnotationIds([]);
+    } catch (err) {
       message.error("Save failed");
     }
   };
 
-  /* ================= TRANSFORM ================= */
-
-  useEffect(() => {
-    const stage = stageRef.current;
-    const node = stage?.findOne(`#${selectedId}`);
-
-    transformerRef.current?.nodes(node ? [node] : []);
-    transformerRef.current?.getLayer()?.batchDraw();
-  }, [selectedId, boxes]);
-
   /* ================= UI ================= */
-
   return (
     <Layout style={{ height: "100vh" }}>
-      {/* LEFT TOOLBAR */}
-
-      <Sider width={80} theme="dark">
-        <Space
-          direction="vertical"
-          style={{ width: "100%", alignItems: "center", marginTop: 20 }}
-        >
-          <Button
-            icon={<AimOutlined />}
-            type={tool === "select" ? "primary" : "text"}
-            onClick={() => setTool("select")}
-          />
-
-          <Button
-            icon={<BorderOutlined />}
-            type={tool === "draw" ? "primary" : "text"}
-            onClick={() => setTool("draw")}
-          />
-
-          <Button
-            icon={<DragOutlined />}
-            type={tool === "move" ? "primary" : "text"}
-            onClick={() => setTool("move")}
-          />
-        </Space>
-      </Sider>
-
-      {/* MAIN */}
-
-      <Content style={{ padding: 16 }}>
-        <Card style={{ marginBottom: 12 }}>
+      <Layout>
+        <Header style={{ background: "#fff" }}>
           <Space>
             <Select
               value={selectedLabel}
@@ -247,100 +301,151 @@ const AnnotationPage: React.FC = () => {
                 label: l.labelName,
                 value: l.labelName,
               }))}
-              style={{ width: 160 }}
+            />
+            <Button type="dashed" onClick={() => setRequestModalVisible(true)}>
+              Request Label
+            </Button>
+            <Tag>
+              {currentIndex + 1}/{task?.dataItems?.length}
+            </Tag>
+
+            <Tag color={isApproved ? "green" : isRejected ? "red" : "blue"}>
+              {currentItem?.reviewStatus}
+            </Tag>
+
+            {isRejected && <Tag color="red">{currentItem?.errorMessage}</Tag>}
+            <Button
+              icon={<LeftOutlined />}
+              onClick={() => setCurrentIndex((i) => i - 1)}
+            />
+            <Button
+              icon={<RightOutlined />}
+              onClick={() => setCurrentIndex((i) => i + 1)}
+            />
+            <Tooltip title="Select">
+              <Button
+                icon={<AimOutlined />}
+                onClick={() => setTool("select")}
+              />
+            </Tooltip>
+            <Tooltip title="Draw">
+              <Button
+                icon={<BorderOutlined />}
+                onClick={() => setTool("draw")}
+              />
+            </Tooltip>
+            <Tooltip title="Move">
+              <Button icon={<DragOutlined />} onClick={() => setTool("move")} />
+            </Tooltip>
+
+            <Button
+              icon={<ZoomInOutlined />}
+              onClick={() => setScale((s) => s * 1.2)}
+            />
+            <Button
+              icon={<ZoomOutOutlined />}
+              onClick={() => setScale((s) => s * 0.8)}
             />
 
-            <Tag color="processing">{tool.toUpperCase()}</Tag>
-
-            <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>
-              Save Annotation
+            <Button type="primary" onClick={handleSubmit}>
+              Save
             </Button>
           </Space>
-        </Card>
+        </Header>
 
-        <Stage
-          width={window.innerWidth - 420}
-          height={window.innerHeight - 160}
-          ref={stageRef}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          draggable={tool === "move"}
-          style={{
-            background: "#fff",
-            borderRadius: 12,
-            boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
-          }}
-        >
-          <Layer>
-            {image && <KonvaImage image={image} />}
+        <Content style={{ background: "#1e1e1e" }}>
+          <Stage
+            width={window.innerWidth - 350}
+            height={window.innerHeight - 120}
+            scaleX={scale}
+            scaleY={scale}
+            x={pos.x}
+            y={pos.y}
+            ref={stageRef}
+            draggable={tool === "move"}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+          >
+            <Layer>
+              {image && <KonvaImage image={image} />}
 
-            {boxes.map((box) => (
-              <React.Fragment key={box.id}>
-                <Rect
-                  id={box.id}
-                  x={box.x}
-                  y={box.y}
-                  width={box.width}
-                  height={box.height}
-                  stroke={labelColors[box.label]}
-                  strokeWidth={2}
-                  draggable={tool === "select"}
-                  onClick={() => setSelectedId(box.id)}
-                />
+              {boxes.map((box) => (
+                <React.Fragment key={box.id}>
+                  <Rect
+                    {...box}
+                    stroke={getColor(box.labelId)}
+                    strokeWidth={2}
+                  />
+                  <KonvaText
+                    text={box.label}
+                    x={box.x}
+                    y={box.y - 15}
+                    fill={getColor(box.labelId)}
+                  />
+                </React.Fragment>
+              ))}
 
-                <KonvaText
-                  text={box.label}
-                  x={box.x}
-                  y={box.y - 18}
-                  fill={labelColors[box.label]}
-                  fontSize={14}
-                  fontStyle="bold"
-                />
-              </React.Fragment>
-            ))}
+              {newBox && <Rect {...newBox} stroke="white" dash={[4, 4]} />}
+            </Layer>
+          </Stage>
+        </Content>
+      </Layout>
+      <Modal
+        title="Request New Label"
+        open={requestModalVisible}
+        onCancel={() => setRequestModalVisible(false)}
+        onOk={async () => {
+          if (!requestLabelName.trim()) {
+            message.warning("Input label");
+            return;
+          }
 
-            {newBox && (
-              <Rect
-                x={newBox.x}
-                y={newBox.y}
-                width={newBox.width}
-                height={newBox.height}
-                stroke="#94a3b8"
-                dash={[4, 4]}
-              />
-            )}
+          try {
+            setRequesting(true);
+            await LabelService.requestLabel({
+              roundId: task.roundId,
+              labelName: requestLabelName.trim(),
+            });
+            message.success(`Requested label: ${requestLabelName}`);
 
-            <Transformer ref={transformerRef} />
-          </Layer>
-        </Stage>
-      </Content>
+            const updatedLabels = await LabelService.getByRound(task.roundId);
+            setLabels(updatedLabels);
+            if (updatedLabels.length)
+              setSelectedLabel(updatedLabels[0].labelName);
 
-      {/* RIGHT PANEL */}
-
-      <Sider width={260} theme="light" style={{ padding: 16 }}>
-        <Text strong>Objects</Text>
-
+            setRequestLabelName("");
+            setRequestModalVisible(false);
+          } catch (err) {
+            console.error(err);
+            message.error("Request label failed");
+          } finally {
+            setRequesting(false);
+          }
+        }}
+        confirmLoading={requesting}
+      >
+        <Input
+          placeholder="Enter new label"
+          value={requestLabelName}
+          onChange={(e) => setRequestLabelName(e.target.value)}
+        />
+      </Modal>
+      <Sider width={260} theme="light">
         <List
+          header="Annotations"
           dataSource={boxes}
-          style={{ marginTop: 10 }}
           renderItem={(item) => (
             <List.Item
-              onClick={() => setSelectedId(item.id)}
-              style={{
-                cursor: "pointer",
-                background: item.id === selectedId ? "#e0f2fe" : "transparent",
-              }}
               actions={[
                 <Button
                   danger
-                  type="text"
                   icon={<DeleteOutlined />}
-                  onClick={deleteSelected}
+                  onClick={() => handleDeleteBox(item)}
                 />,
               ]}
             >
-              <Tag color={labelColors[item.label]}>{item.label}</Tag>
+              <Tag color={getColor(item.labelId)}>{item.label}</Tag>
             </List.Item>
           )}
         />
