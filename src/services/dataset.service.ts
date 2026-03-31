@@ -15,7 +15,10 @@ export const DatasetService = {
     const response = await axiosInstance.get(`/api/datasets/${id}`);
     return response.data;
   },
-
+  getByDatasetOverview: async (id: number) => {
+    const response = await axiosInstance.get(`/api/datasets/${id}/overview`);
+    return response.data;
+  },
   getByProject: async (projectId: number) => {
     const response = await axiosInstance.get(
       `/api/datasets/project/${projectId}`,

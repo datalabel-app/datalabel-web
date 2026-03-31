@@ -132,7 +132,7 @@ const CreateDatasetPage: React.FC = () => {
 
         <Form layout="vertical" onFinish={onFinish}>
           {/* DATASET */}
-          <Divider orientation="horizontal" titlePlacement="left">Dataset Info</Divider>
+          <Divider orientation="horizontal">Dataset Info</Divider>
 
           <Form.Item
             label="Dataset Name"
@@ -143,7 +143,7 @@ const CreateDatasetPage: React.FC = () => {
           </Form.Item>
 
           {/* ROUND */}
-          <Divider orientation="horizontal" titlePlacement="left">Round Config</Divider>
+          <Divider orientation="horizontal">Round Config</Divider>
 
           <Form.Item
             label="Instruction (Description work)"
@@ -161,7 +161,7 @@ const CreateDatasetPage: React.FC = () => {
           </Form.Item>
 
           {/* LABEL */}
-          <Divider orientation="horizontal" titlePlacement="left">Labels</Divider>
+          <Divider orientation="horizontal">Labels</Divider>
 
           <Button onClick={addLabel}>+ Add Label</Button>
 
@@ -181,7 +181,7 @@ const CreateDatasetPage: React.FC = () => {
           </div>
 
           {/* UPLOAD */}
-          <Divider orientation="horizontal" titlePlacement="left">Upload Data</Divider>
+          <Divider orientation="horizontal">Upload Data</Divider>
 
           <Form.Item>
             <Select value={uploadType} onChange={(v) => setUploadType(v)}>
