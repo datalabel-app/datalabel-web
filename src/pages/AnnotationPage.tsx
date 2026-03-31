@@ -5,7 +5,6 @@ import {
   Rect,
   Image as KonvaImage,
   Text as KonvaText,
-  Line,
 } from "react-konva";
 import useImage from "use-image";
 import { v4 as uuidv4 } from "uuid";
@@ -158,19 +157,14 @@ const AnnotationPage: React.FC = () => {
   }, [image]);
 
   /* ================= DRAW ================= */
-  const getPointer = () => {
-    const stage = stageRef.current;
-    const transform = stage.getAbsoluteTransform().copy();
-    transform.invert();
-    return transform.point(stage.getPointerPosition());
-  };
 
 const handleMouseDown = (e: any) => {
+  console.log({e})
   if (tool !== "draw" || isApproved) return;
 
   const posOnImage = getPointerOnImage();
   const label = labels.find((l) => l.labelName === selectedLabel);
-
+if (!image) return;
   // Clamp tọa độ vào trong ảnh
   const x = Math.max(0, Math.min(posOnImage.x, image.width));
   const y = Math.max(0, Math.min(posOnImage.y, image.height));
@@ -191,7 +185,7 @@ const handleMouseMove = () => {
   if (!drawing || !newBox) return;
 
   const posOnImage = getPointerOnImage();
-
+if (!image) return;
   // Tọa độ hiện tại clamp vào ảnh
   let x2 = Math.max(0, Math.min(posOnImage.x, image.width));
   let y2 = Math.max(0, Math.min(posOnImage.y, image.height));
@@ -213,7 +207,7 @@ const handleMouseUp = () => {
     x: newBox.width < 0 ? newBox.x + newBox.width : newBox.x,
     y: newBox.height < 0 ? newBox.y + newBox.height : newBox.y,
   };
-
+if (!image) return;
   // Giới hạn cuối cùng vào trong ảnh
   fixed.x = Math.max(0, Math.min(fixed.x, image.width - fixed.width));
   fixed.y = Math.max(0, Math.min(fixed.y, image.height - fixed.height));
