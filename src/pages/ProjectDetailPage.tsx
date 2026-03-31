@@ -142,7 +142,6 @@ const ProjectDetailPage: React.FC = () => {
     fetchPendingLabels();
   };
 
-  // ================= SEARCH TREE =================
   const filterTree = (data: any[]): any[] => {
     return data
       .map((item) => {
@@ -170,7 +169,6 @@ const ProjectDetailPage: React.FC = () => {
     }
     return null;
   };
-  // ================= RENDER TREE =================
   const renderTree = (
     data: any[],
     level = 0,
