@@ -20,6 +20,7 @@ import {
   ArrowLeftOutlined,
   DownloadOutlined,
   ExclamationCircleOutlined,
+  EyeOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
@@ -31,6 +32,8 @@ import { UserService } from "../services/user.service";
 import { LabelService } from "../services/label.service";
 import { DatasetRoundService } from "../services/datasetround.service";
 import { saveAs } from "file-saver";
+import { DatePicker } from "antd";
+import dayjs from "dayjs";
 const { Title } = Typography;
 
 const { confirm } = Modal;
@@ -57,7 +60,7 @@ const DatasetDetailPage: React.FC = () => {
   const [newLabel, setNewLabel] = useState("");
   const [shapeType, setShapeType] = useState<number>(0);
   const [creating, setCreating] = useState(false);
-
+  const [deadline, setDeadline] = useState<string | null>(null);
   const [round, setRound] = useState<any>(null);
 
   const [unassignedItems, setUnassignedItems] = useState<any[]>([]);
@@ -196,6 +199,14 @@ const DatasetDetailPage: React.FC = () => {
       message.warning("Empty Item select");
       return;
     }
+    if (!deadline) {
+  message.warning("Please select deadline");
+  return;
+} 
+if(labels.length === 0) {
+    message.warning("Please add labels");
+  return;
+}
 
     try {
       setCreating(true);
@@ -231,6 +242,7 @@ const DatasetDetailPage: React.FC = () => {
         annotatorId: selectedAnnotator,
         reviewerId: selectedReviewer,
         dataItemIds: selectedItems,
+         deadline: deadline,
       });
 
       message.success(`Create task for ${selectedItems.length} items`);
@@ -281,13 +293,39 @@ const DatasetDetailPage: React.FC = () => {
   };
   const loading = loadingData || loadingLabels;
   // ================= TABLE =================
-  const columns: any = [
-    {
-      title: "File",
-      dataIndex: "fileUrl",
-      render: (url: string) => renderFile(url),
-    },
-  ];
+
+const columns: any = [
+ {
+    title: "File",
+    dataIndex: "fileUrl",
+    render: (url: string) => renderFile(url),
+  },
+  ...(!dataset?.parentDatasetId
+    ? [
+        {
+          title: "Label Count",
+          dataIndex: "labelCount",
+          key: "labelCount",
+          align: "center",
+          render: (count: number) => <b>{count}</b>,
+        },
+        {
+          title: "Labels",
+          dataIndex: "labels",
+          key: "labels",
+          render: (labels: string[]) => (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {labels.map((label) => (
+                <Tag color="blue" key={label}>
+                  {label}
+                </Tag>
+              ))}
+            </div>
+          ),
+        },
+      ]
+    : []),
+];
 
   if (loading)
     return (
@@ -341,6 +379,15 @@ const DatasetDetailPage: React.FC = () => {
         <Row justify="space-between">
           <Title level={4}>{dataset?.datasetName}</Title>
           <Col style={{ display: "flex", gap: 12 }}>
+          
+           <Button
+  type="primary" 
+  icon={<EyeOutlined />}
+  style={{ marginLeft: 8 }}
+  onClick={() => navigate(`/dataset-overview/${datasetId}`)}
+>
+  Overview
+</Button>
             {!dataset?.parentDatasetId && (
               <Button
                 type="primary"
@@ -462,13 +509,66 @@ const DatasetDetailPage: React.FC = () => {
                 <Button onClick={handleAddLabel}>Add</Button>
               </Space>
 
-              <div style={{ marginTop: 10 }}>
-                {labels.map((l, i) => (
-                  <Tag key={i}>{l}</Tag>
-                ))}
-              </div>
+             <div style={{ marginTop: 10 }}>
+  {labels.map((l, i) => (
+    <Tag
+      key={i}
+      closable
+      onClose={() => {
+        setLabels((prev) => prev.filter((label) => label !== l));
+      }}
+    >
+      {l}
+    </Tag>
+  ))}
+</div>
             </>
           )}
+          <div>
+  <div>Deadline</div>
+ <DatePicker
+  showTime
+  style={{ width: "100%" }}
+  disabledDate={(current) =>
+    current && current < dayjs().startOf("day")
+  }
+  disabledTime={(current) => {
+    if (!current) return {};
+
+    const now = dayjs();
+
+    // nếu chọn đúng ngày hôm nay → khóa giờ quá khứ
+    if (current.isSame(now, "day")) {
+      return {
+        disabledHours: () =>
+          Array.from({ length: now.hour() }, (_, i) => i),
+
+        disabledMinutes: (selectedHour) => {
+          if (selectedHour === now.hour()) {
+            return Array.from({ length: now.minute() }, (_, i) => i);
+          }
+          return [];
+        },
+
+        disabledSeconds: (selectedHour, selectedMinute) => {
+          if (
+            selectedHour === now.hour() &&
+            selectedMinute === now.minute()
+          ) {
+            return Array.from({ length: now.second() }, (_, i) => i);
+          }
+          return [];
+        },
+      };
+    }
+
+    return {};
+  }}
+  onChange={(value) => {
+    setDeadline(value ? value.toISOString() : null);
+  }}
+/>
+</div>
 
           {/* SELECT USER */}
           <div>
