@@ -313,7 +313,7 @@ const ReviewerPage: React.FC = () => {
 
         {/* RIGHT */}
         <Card style={{ flex: 1 }}>
-          <div style={{ background: "#1e1e1e", borderRadius: 8 }}>
+          <div style={{ background: "#c2c2c2", borderRadius: 8 }}>
             <Stage
               width={window.innerWidth - 500}
               height={500}
@@ -325,18 +325,43 @@ const ReviewerPage: React.FC = () => {
               ref={stageRef}
             >
               <Layer>
-                {image && <KonvaImage image={image} />}
+                {image && (
+                  <>
+                    {/* Ảnh */}
+                    <KonvaImage image={image} width={image.width} height={image.height} />
+
+                    {/* Viền ảnh */}
+                    <Rect
+                      x={0}
+                      y={0}
+                      width={image.width}
+                      height={image.height}
+                      stroke="black"
+                      strokeWidth={1}
+                      dash={[10, 5]}
+                    />
+
+
+                  </>
+                )}
 
                 {boxes.map((box) => (
                   <React.Fragment key={box.id}>
                     <Rect
                       {...box}
+                      id={String(box.id)}
                       stroke={labelColors[box.label]}
                       strokeWidth={2}
                     />
                     <Text
                       text={box.label}
                       x={box.x}
+                      y={box.y - 15}
+                      fill={labelColors[box.label]}
+                    />
+                    <Text
+                      text={`(${Math.round(box.x)}, ${Math.round(box.y)})`}
+                      x={box.x + 20}
                       y={box.y - 15}
                       fill={labelColors[box.label]}
                     />

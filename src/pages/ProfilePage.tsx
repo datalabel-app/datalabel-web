@@ -137,8 +137,11 @@ const ProfilePage: React.FC = () => {
                       <Input disabled />
                     </Form.Item>
                   </Col>
-                </Row>
 
+                </Row>
+                {user?.points !== 0 && <Row>
+                  <span>Points: </span> <strong>{user?.points}</strong>
+                </Row>}
                 <div style={{ textAlign: "right" }}>
                   <Button type="primary" htmlType="submit" loading={loading}>
                     Save changes
