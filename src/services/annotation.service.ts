@@ -1,9 +1,17 @@
 import axiosInstance from "./main.service";
 
 export const AnnotationService = {
-  create: async (payload: any) => {
+  bulkCreateClassfication: async (payload: any) => {
     const response = await axiosInstance.post(
-      "/api/annotations/classification",
+      "/api/annotations/classification/bulk",
+      payload,
+    );
+    return response.data;
+  },
+
+  updateBulk: async (payload: any) => {
+    const response = await axiosInstance.put(
+      "/api/annotations/bulk-update",
       payload,
     );
     return response.data;
@@ -14,6 +22,15 @@ export const AnnotationService = {
       "/api/annotations/shape",
       payload,
     );
+    return response.data;
+  },
+  getAnnotationByTaskAndItem: async (taskId: number, itemId: number) => {
+    const response = await axiosInstance.get(`/api/annotations`, {
+      params: {
+        itemId,
+        taskId,
+      },
+    });
     return response.data;
   },
 
