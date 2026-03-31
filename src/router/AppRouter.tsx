@@ -22,6 +22,8 @@ import ChangePasswordPage from "../pages/ChangePasswordPage";
 import ManagerDashboard from "../pages/ManagerDashboard";
 import AdminDashboard from "../pages/AdminDashboard";
 import MyLabelRequests from "../pages/MyLabelRequests";
+import ManagerTasksPage from "../pages/ManagerTasksPage";
+import DatasetOverviewPage from "../pages/DatasetOverviewPage";
 
 const AppRouter: React.FC = () => {
   return (
@@ -131,6 +133,16 @@ const AppRouter: React.FC = () => {
             </PrivateRoute>
           }
         />
+        <Route
+          path="/dataset-overview/:datasetId"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <DatasetOverviewPage />
+              </HomeLayout>
+            </PrivateRoute>
+          }
+        />
 
         <Route
           path="/projects/:id"
@@ -138,6 +150,16 @@ const AppRouter: React.FC = () => {
             <PrivateRoute>
               <HomeLayout>
                 <ProjectDetailPage />
+              </HomeLayout>
+            </PrivateRoute>
+          }
+        />
+         <Route
+          path="/task-manager"
+          element={
+            <PrivateRoute>
+              <HomeLayout>
+                <ManagerTasksPage />
               </HomeLayout>
             </PrivateRoute>
           }

@@ -51,4 +51,12 @@ export const TasksService = {
     const response = await axiosInstance.put(`/api/tasks/${taskId}`, payload);
     return response.data;
   },
+  updateDealine: async (taskId: number, payload: any) => {
+    const response = await axiosInstance.put(`/api/tasks/${taskId}/deadline`, payload);
+    return response.data;
+  },
+  getTaskManager: async () => {
+    const response = await axiosInstance.get(`/api/tasks/manager/tasks`);
+    return response.data;
+  }
 };

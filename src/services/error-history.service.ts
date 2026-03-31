@@ -25,6 +25,14 @@ export const ErrorHistoryService = {
     }
   },
 
+  getErrorsGroupByItem: async (datasetId: number) => {
+    const response = await axiosInstance.get(
+      `/api/error-history/dataset/${datasetId}/group-by-item`,
+    );
+    return response.data;
+
+  },
+
   getSummary: async (datasetId: number) => {
     try {
       const response = await axiosInstance.get(

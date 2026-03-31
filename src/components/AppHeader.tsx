@@ -59,6 +59,10 @@ const AppHeader: React.FC = () => {
         label: "Projects",
       },
       {
+        key: "/task-manager",
+        label: "Tasks",
+      },
+      {
         key: "/dashboard-manager",
         label: "Dashboard",
       },
@@ -82,7 +86,7 @@ const AppHeader: React.FC = () => {
           onClick={() => navigate("/")}
           style={{ cursor: "pointer" }}
         >
-          SWP
+         <i style={{fontSize: 16}}> Role: {role === 1 ? "ADMIN" : role === 2 ? "MANAGER" : role === 3 ? "ANNOTATOR" : "REVIEWER"}</i>
         </div>
 
         <Menu

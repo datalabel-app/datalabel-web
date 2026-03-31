@@ -5,6 +5,7 @@ import {
   Rect,
   Image as KonvaImage,
   Text as KonvaText,
+  Line,
 } from "react-konva";
 import useImage from "use-image";
 import { v4 as uuidv4 } from "uuid";
@@ -60,7 +61,7 @@ const COLORS = [
   "#52c41a",
   "#faad14",
   "#722ed1",
-  "#eb2f96",
+  "#2febac",
 ];
 
 const AnnotationPage: React.FC = () => {
@@ -164,55 +165,77 @@ const AnnotationPage: React.FC = () => {
     return transform.point(stage.getPointerPosition());
   };
 
-  const handleMouseDown = (e: any) => {
-    if (tool !== "draw" || isApproved) return;
-    if (e.target.getClassName() === "Rect") return;
+const handleMouseDown = (e: any) => {
+  if (tool !== "draw" || isApproved) return;
 
-    const pos = getPointer();
-    const label = labels.find((l) => l.labelName === selectedLabel);
+  const posOnImage = getPointerOnImage();
+  const label = labels.find((l) => l.labelName === selectedLabel);
 
-    setDrawing(true);
-    setNewBox({
-      id: uuidv4(),
-      x: pos.x,
-      y: pos.y,
-      width: 0,
-      height: 0,
-      label: selectedLabel,
-      labelId: label?.labelId,
-    });
+  // Clamp tọa độ vào trong ảnh
+  const x = Math.max(0, Math.min(posOnImage.x, image.width));
+  const y = Math.max(0, Math.min(posOnImage.y, image.height));
+
+  setDrawing(true);
+  setNewBox({
+    id: uuidv4(),
+    x,
+    y,
+    width: 0,
+    height: 0,
+    label: selectedLabel,
+    labelId: label?.labelId,
+  });
+};
+
+const handleMouseMove = () => {
+  if (!drawing || !newBox) return;
+
+  const posOnImage = getPointerOnImage();
+
+  // Tọa độ hiện tại clamp vào ảnh
+  let x2 = Math.max(0, Math.min(posOnImage.x, image.width));
+  let y2 = Math.max(0, Math.min(posOnImage.y, image.height));
+
+  setNewBox({
+    ...newBox,
+    width: x2 - newBox.x,
+    height: y2 - newBox.y,
+  });
+};
+
+const handleMouseUp = () => {
+  if (!newBox) return;
+
+  const fixed = {
+    ...newBox,
+    width: Math.abs(newBox.width),
+    height: Math.abs(newBox.height),
+    x: newBox.width < 0 ? newBox.x + newBox.width : newBox.x,
+    y: newBox.height < 0 ? newBox.y + newBox.height : newBox.y,
   };
 
-  const handleMouseMove = () => {
-    if (!drawing || !newBox) return;
-    const pos = getPointer();
+  // Giới hạn cuối cùng vào trong ảnh
+  fixed.x = Math.max(0, Math.min(fixed.x, image.width - fixed.width));
+  fixed.y = Math.max(0, Math.min(fixed.y, image.height - fixed.height));
 
-    setNewBox({
-      ...newBox,
-      width: pos.x - newBox.x,
-      height: pos.y - newBox.y,
-    });
+  if (fixed.width > 5 && fixed.height > 5) {
+    setBoxes((prev) => [...prev, fixed]);
+  }
+
+  setDrawing(false);
+  setNewBox(null);
+};
+const getPointerOnImage = () => {
+  const stage = stageRef.current;
+  const pointerPos = stage.getPointerPosition();
+  if (!pointerPos) return { x: 0, y: 0 };
+
+  // Lấy tọa độ so với ảnh, trừ offset và chia scale
+  return {
+    x: (pointerPos.x - pos.x) / scale,
+    y: (pointerPos.y - pos.y) / scale,
   };
-
-  const handleMouseUp = () => {
-    if (!newBox) return;
-
-    const fixed = {
-      ...newBox,
-      width: Math.abs(newBox.width),
-      height: Math.abs(newBox.height),
-      x: newBox.width < 0 ? newBox.x + newBox.width : newBox.x,
-      y: newBox.height < 0 ? newBox.y + newBox.height : newBox.y,
-    };
-
-    if (fixed.width > 5 && fixed.height > 5) {
-      setBoxes((prev) => [...prev, fixed]);
-    }
-
-    setDrawing(false);
-    setNewBox(null);
-  };
-
+};
   /* ================= DELETE BOX ================= */
   const handleDeleteBox = (box: Box) => {
     if (box.annotationId) {
@@ -352,42 +375,64 @@ const AnnotationPage: React.FC = () => {
           </Space>
         </Header>
 
-        <Content style={{ background: "#1e1e1e" }}>
-          <Stage
-            width={window.innerWidth - 350}
-            height={window.innerHeight - 120}
-            scaleX={scale}
-            scaleY={scale}
-            x={pos.x}
-            y={pos.y}
-            ref={stageRef}
-            draggable={tool === "move"}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-          >
-            <Layer>
-              {image && <KonvaImage image={image} />}
+        <Content >
+   <Stage
+      width={window.innerWidth - 350}
+      height={window.innerHeight - 120}
+      scaleX={scale}
+      scaleY={scale}
+      x={pos.x}
+      y={pos.y}
+      ref={stageRef}
+      draggable={tool === "move"}
+      onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
+    >
+      <Layer>
+        {image && (
+          <>
+            {/* Ảnh */}
+            <KonvaImage image={image} width={image.width} height={image.height} />
 
-              {boxes.map((box) => (
-                <React.Fragment key={box.id}>
-                  <Rect
-                    {...box}
-                    stroke={getColor(box.labelId)}
-                    strokeWidth={2}
-                  />
-                  <KonvaText
-                    text={box.label}
-                    x={box.x}
-                    y={box.y - 15}
-                    fill={getColor(box.labelId)}
-                  />
-                </React.Fragment>
-              ))}
+            {/* Viền ảnh */}
+            <Rect
+              x={0}
+              y={0}
+              width={image.width}
+              height={image.height}
+              stroke="black"
+              strokeWidth={1}
+              dash={[10, 5]}
+            />
 
-              {newBox && <Rect {...newBox} stroke="white" dash={[4, 4]} />}
-            </Layer>
-          </Stage>
+            
+          </>
+        )}
+
+        {/* Boxes */}
+        {boxes.map((box) => (
+          <React.Fragment key={box.id}>
+            <Rect {...box} stroke={getColor(box.labelId)} strokeWidth={2} />
+            <KonvaText
+              text={box.label}
+              x={box.x}
+              y={box.y - 15}
+              fill={getColor(box.labelId)}
+              fontSize={10}
+            />
+            <KonvaText
+              text={`(${Math.round(box.x)}, ${Math.round(box.y)})`}
+              x={box.x + 20}
+              y={box.y - 15}
+              fill={getColor(box.labelId)}
+              fontSize={10}
+            />
+          </React.Fragment>
+        ))}
+
+        {/* Box đang vẽ */}
+        {newBox && <Rect {...newBox} stroke="white" dash={[4, 4]} />}
+      </Layer>
+    </Stage>
         </Content>
       </Layout>
       <Modal

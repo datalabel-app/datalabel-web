@@ -20,6 +20,7 @@ import {
   ArrowLeftOutlined,
   DownloadOutlined,
   ExclamationCircleOutlined,
+  EyeOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
@@ -31,6 +32,9 @@ import { UserService } from "../services/user.service";
 import { LabelService } from "../services/label.service";
 import { DatasetRoundService } from "../services/datasetround.service";
 import { saveAs } from "file-saver";
+import { DatePicker } from "antd";
+import dayjs from "dayjs";
+import { ErrorHistoryService } from "../services/error-history.service";
 const { Title } = Typography;
 
 const { confirm } = Modal;
@@ -57,12 +61,15 @@ const DatasetDetailPage: React.FC = () => {
   const [newLabel, setNewLabel] = useState("");
   const [shapeType, setShapeType] = useState<number>(0);
   const [creating, setCreating] = useState(false);
-
+  const [deadline, setDeadline] = useState<string | null>(null);
   const [round, setRound] = useState<any>(null);
 
   const [unassignedItems, setUnassignedItems] = useState<any[]>([]);
   const [selectionMode, setSelectionMode] = useState<"all" | "number">("all");
   const [numberInput, setNumberInput] = useState<number>(0);
+  const [errorModal, setErrorModal] = useState(false);
+const [errorData, setErrorData] = useState<any[]>([]);
+const [loadingError, setLoadingError] = useState(false);
   const hasRound = !!round;
 
   // ================= FETCH =================
@@ -120,6 +127,19 @@ const DatasetDetailPage: React.FC = () => {
       setLoadingLabels(false);
     }
   };
+
+  const handleViewErrors = async () => {
+  try {
+    setLoadingError(true);
+    const res = await ErrorHistoryService.getErrorsGroupByItem(Number(datasetId));
+    setErrorData(res || []);
+    setErrorModal(true);
+  } catch {
+    message.error("Load errors failed");
+  } finally {
+    setLoadingError(false);
+  }
+};
 
   useEffect(() => {
     if (!datasetId) return;
@@ -196,6 +216,14 @@ const DatasetDetailPage: React.FC = () => {
       message.warning("Empty Item select");
       return;
     }
+    if (!deadline) {
+  message.warning("Please select deadline");
+  return;
+} 
+if(labels.length === 0) {
+    message.warning("Please add labels");
+  return;
+}
 
     try {
       setCreating(true);
@@ -231,6 +259,7 @@ const DatasetDetailPage: React.FC = () => {
         annotatorId: selectedAnnotator,
         reviewerId: selectedReviewer,
         dataItemIds: selectedItems,
+         deadline: deadline,
       });
 
       message.success(`Create task for ${selectedItems.length} items`);
@@ -281,13 +310,39 @@ const DatasetDetailPage: React.FC = () => {
   };
   const loading = loadingData || loadingLabels;
   // ================= TABLE =================
-  const columns: any = [
-    {
-      title: "File",
-      dataIndex: "fileUrl",
-      render: (url: string) => renderFile(url),
-    },
-  ];
+
+const columns: any = [
+ {
+    title: "File",
+    dataIndex: "fileUrl",
+    render: (url: string) => renderFile(url),
+  },
+  ...(!dataset?.parentDatasetId
+    ? [
+        {
+          title: "Label Count",
+          dataIndex: "labelCount",
+          key: "labelCount",
+          align: "center",
+          render: (count: number) => <b>{count}</b>,
+        },
+        {
+          title: "Labels",
+          dataIndex: "labels",
+          key: "labels",
+          render: (labels: string[]) => (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {labels.map((label) => (
+                <Tag color="blue" key={label}>
+                  {label}
+                </Tag>
+              ))}
+            </div>
+          ),
+        },
+      ]
+    : []),
+];
 
   if (loading)
     return (
@@ -328,6 +383,48 @@ const DatasetDetailPage: React.FC = () => {
 
     fetchData();
   };
+  const renderPreview = (url: string) => {
+  const ext = url.split(".").pop()?.toLowerCase();
+
+  if (["jpg", "jpeg", "png", "webp"].includes(ext || "")) {
+    return (
+      <img
+        src={url}
+        style={{
+          width: "100%",
+          borderRadius: 8,
+          border: "1px solid #eee",
+          objectFit: "cover",
+        }}
+      />
+    );
+  }
+
+  if (["mp4", "webm"].includes(ext || "")) {
+    return (
+      <video
+        src={url}
+        controls
+        style={{
+          width: "100%",
+          borderRadius: 8,
+        }}
+      />
+    );
+  }
+
+  if (["mp3", "wav"].includes(ext || "")) {
+    return (
+      <audio
+        controls
+        src={url}
+        style={{ width: "100%" }}
+      />
+    );
+  }
+
+  return <Tag>Unsupported</Tag>;
+};
   return (
     <div style={{ padding: 24 }}>
       <Button
@@ -341,6 +438,22 @@ const DatasetDetailPage: React.FC = () => {
         <Row justify="space-between">
           <Title level={4}>{dataset?.datasetName}</Title>
           <Col style={{ display: "flex", gap: 12 }}>
+          
+           <Button
+  type="primary" 
+  icon={<EyeOutlined />}
+  style={{ marginLeft: 8 }}
+  onClick={() => navigate(`/dataset-overview/${datasetId}`)}
+>
+  Overview
+</Button>
+<Button
+  icon={<ExclamationCircleOutlined />}
+  danger
+  onClick={handleViewErrors}
+>
+  View Errors
+</Button>
             {!dataset?.parentDatasetId && (
               <Button
                 type="primary"
@@ -462,13 +575,66 @@ const DatasetDetailPage: React.FC = () => {
                 <Button onClick={handleAddLabel}>Add</Button>
               </Space>
 
-              <div style={{ marginTop: 10 }}>
-                {labels.map((l, i) => (
-                  <Tag key={i}>{l}</Tag>
-                ))}
-              </div>
+             <div style={{ marginTop: 10 }}>
+  {labels.map((l, i) => (
+    <Tag
+      key={i}
+      closable
+      onClose={() => {
+        setLabels((prev) => prev.filter((label) => label !== l));
+      }}
+    >
+      {l}
+    </Tag>
+  ))}
+</div>
             </>
           )}
+          <div>
+  <div>Deadline</div>
+ <DatePicker
+  showTime
+  style={{ width: "100%" }}
+  disabledDate={(current) =>
+    current && current < dayjs().startOf("day")
+  }
+  disabledTime={(current) => {
+    if (!current) return {};
+
+    const now = dayjs();
+
+    // nếu chọn đúng ngày hôm nay → khóa giờ quá khứ
+    if (current.isSame(now, "day")) {
+      return {
+        disabledHours: () =>
+          Array.from({ length: now.hour() }, (_, i) => i),
+
+        disabledMinutes: (selectedHour) => {
+          if (selectedHour === now.hour()) {
+            return Array.from({ length: now.minute() }, (_, i) => i);
+          }
+          return [];
+        },
+
+        disabledSeconds: (selectedHour, selectedMinute) => {
+          if (
+            selectedHour === now.hour() &&
+            selectedMinute === now.minute()
+          ) {
+            return Array.from({ length: now.second() }, (_, i) => i);
+          }
+          return [];
+        },
+      };
+    }
+
+    return {};
+  }}
+  onChange={(value) => {
+    setDeadline(value ? value.toISOString() : null);
+  }}
+/>
+</div>
 
           {/* SELECT USER */}
           <div>
@@ -511,6 +677,70 @@ const DatasetDetailPage: React.FC = () => {
           </div>
         </Space>
       </Modal>
+      <Modal
+  title="Error History"
+  open={errorModal}
+  onCancel={() => setErrorModal(false)}
+  footer={null}
+  width={900}
+>
+  {loadingError ? (
+    <div style={{ textAlign: "center", padding: 40 }}>
+      <Spin />
+    </div>
+  ) : (
+    <div style={{ maxHeight: 500, overflowY: "auto" }}>
+      {errorData.length === 0 && (
+        <div style={{ textAlign: "center" }}>No errors found</div>
+      )}
+
+      {errorData.map((item) => (
+        <Card
+          key={item.itemId}
+          style={{ marginBottom: 16 }}
+          size="small"
+        >
+          {/* IMAGE */}
+          <Row gutter={16}>
+            <Col span={6}>
+             {renderPreview(item.fileUrl)}
+            </Col>
+
+            {/* ERROR LIST */}
+            <Col span={18}>
+              <b>Item ID: {item.itemId}</b>
+
+              <div style={{ marginTop: 10 }}>
+                {item.errors.map((err: any) => (
+                  <Card
+                    key={err.errorId}
+                    size="small"
+                    style={{
+                      marginBottom: 8,
+                      borderLeft: "4px solid red",
+                    }}
+                  >
+                    <div>
+                      <b>Error:</b>{" "}
+                      <span style={{ color: "red" }}>
+                        {err.errorMessage}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: 12, color: "#888" }}>
+                      Reviewer: {err.reviewerId} |{" "}
+                      {dayjs(err.createdAt).format("DD/MM/YYYY HH:mm")}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </Col>
+          </Row>
+        </Card>
+      ))}
+    </div>
+  )}
+</Modal>
     </div>
   );
 };

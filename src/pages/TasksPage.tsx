@@ -10,6 +10,7 @@ import {
   Card,
   Space,
   Select,
+  Collapse,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -21,48 +22,49 @@ import {
 import { useNavigate } from "react-router-dom";
 import { TasksService } from "../services/task.service";
 import { REVIEW_STATUS } from "../constants/review-status";
+import dayjs from "dayjs";
 
 const { Title, Text } = Typography;
+const { Panel } = Collapse;
 
 interface Task {
   taskId: number;
   roundName: string;
+  datasetName: string;
   annotatorName: string;
   reviewerName: string;
   dataItemCount: number;
   shapeType: number;
   status: number;
+  deadline: string;
   items?: any[];
+}
+
+interface ProjectGroup {
+  projectName: string;
+  tasks: Task[];
 }
 
 const TasksPage: React.FC = () => {
   const navigate = useNavigate();
   const role = Number(localStorage.getItem("role"));
 
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<ProjectGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState(search);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 500);
+  const [statusFilter, setStatusFilter] = useState<number | undefined>();
 
-    // cleanup nếu user gõ tiếp
-    return () => clearTimeout(handler);
-  }, [search]);
   // ================= LOAD =================
-  // ================= LOAD =================
-  const loadTasks = async (searchValue = "", statusValue?: number) => {
+  const loadTasks = async () => {
     try {
       setLoading(true);
 
-      let data: Task[] = [];
+      let data: ProjectGroup[] = [];
 
       if (role === 3) {
-        data = await TasksService.getTasksByAnnotator(searchValue, statusValue);
+        data = await TasksService.getTasksByAnnotator(search, statusFilter);
       } else if (role === 4) {
-        data = await TasksService.getTasksByReviewer(searchValue, statusValue);
+        data = await TasksService.getTasksByReviewer(search, statusFilter);
       }
 
       setTasks(data || []);
@@ -74,66 +76,45 @@ const TasksPage: React.FC = () => {
   };
 
   useEffect(() => {
-    loadTasks(debouncedSearch);
-  }, [debouncedSearch]);
-
-  // ================= FILTER =================
-  const filtered = tasks.filter((t) =>
-    t.roundName.toLowerCase().includes(search.toLowerCase()),
-  );
+    loadTasks();
+  }, [search, statusFilter]);
 
   // ================= NAVIGATION =================
   const goToTask = (task: Task) => {
     if (role === 3) {
-      if (task.shapeType === 1) {
-        navigate(`/classification/${task.taskId}`);
-      } else {
-        navigate(`/annotate/${task.taskId}`);
-      }
+      navigate(
+        task.shapeType === 1
+          ? `/classification/${task.taskId}`
+          : `/annotate/${task.taskId}`,
+      );
     }
     if (role === 4) {
-      if (task.shapeType === 1) {
-        navigate(`/review/type/${task.taskId}`);
-      } else {
-        navigate(`/review/${task.taskId}`);
-      }
+      navigate(
+        task.shapeType === 1
+          ? `/review/type/${task.taskId}`
+          : `/review/${task.taskId}`,
+      );
     }
   };
 
-  // ================= SHAPE TAG =================
-  const getShapeTag = (shapeType: number) => {
-    return shapeType === 1 ? (
+  // ================= TAG =================
+  const getShapeTag = (shapeType: number) =>
+    shapeType === 1 ? (
       <Tag color="blue">Classification</Tag>
     ) : (
       <Tag color="green">BBox</Tag>
     );
-  };
+
   const renderStatusTag = (status: number) => {
     switch (status) {
       case 0:
-        return (
-          <Tag icon={<ClockCircleOutlined />} color="default">
-            Pending
-          </Tag>
-        );
+        return <Tag icon={<ClockCircleOutlined />}>Pending</Tag>;
       case 1:
-        return (
-          <Tag icon={<EditOutlined />} color="processing">
-            Annotating
-          </Tag>
-        );
+        return <Tag color="processing">Annotating</Tag>;
       case 2:
-        return (
-          <Tag icon={<EyeOutlined />} color="warning">
-            Review
-          </Tag>
-        );
+        return <Tag color="warning">Review</Tag>;
       case 3:
-        return (
-          <Tag icon={<CheckCircleOutlined />} color="success">
-            Done
-          </Tag>
-        );
+        return <Tag color="success">Done</Tag>;
       default:
         return <Tag>Unknown</Tag>;
     }
@@ -144,88 +125,129 @@ const TasksPage: React.FC = () => {
     {
       title: "Task ID",
       dataIndex: "taskId",
-      key: "taskId",
-      width: 100,
+      width: 90,
     },
     {
       title: "Round",
       dataIndex: "roundName",
-      key: "roundName",
-      render: (text: string) => <b>{text}</b>,
+      render: (t: string) => <b>{t}</b>,
     },
     {
-      title: "Dataset Name",
+      title: "Dataset",
       dataIndex: "datasetName",
-      key: "datasetName",
-      render: (text: string) => <b>{text}</b>,
+      render: (t: string) => <b>{t}</b>,
     },
     {
       title: "Type",
       dataIndex: "shapeType",
-      key: "shapeType",
-      render: (shapeType: number) => getShapeTag(shapeType),
+      render: getShapeTag,
     },
     {
       title: "Annotator",
       dataIndex: "annotatorName",
-      key: "annotatorName",
-      render: (text: string) => <Tag color="blue">{text || "Unassigned"}</Tag>,
+      render: (t: string) => <Tag color="blue">{t || "Unassigned"}</Tag>,
     },
     {
       title: "Reviewer",
       dataIndex: "reviewerName",
-      key: "reviewerName",
-      render: (text: string) => (
-        <Tag color="purple">{text || "Unassigned"}</Tag>
-      ),
+      render: (t: string) => <Tag color="purple">{t || "Unassigned"}</Tag>,
     },
     {
       title: "Items",
       dataIndex: "dataItemCount",
-      key: "dataItemCount",
-      render: (count: number) => <Tag color="gold">{count} items</Tag>,
+      render: (c: number) => <Tag color="gold">{c}</Tag>,
     },
     {
       title: "Status",
       dataIndex: "status",
-      key: "status",
-      render: (status: number) => renderStatusTag(status),
+      render: renderStatusTag,
     },
     {
-      title: "Action",
-      key: "action",
-      render: (_: any, record: Task) => {
-        const isTaskCompletedForReviewer = (record: Task) => {
-          return record.items?.every(
-            (i: any) =>
-              i.reviewStatus === REVIEW_STATUS.APPROVED ||
-              i.reviewStatus === REVIEW_STATUS.REJECTED,
-          );
-        };
+      title: "Deadline",
+      dataIndex: "deadline",
+      render: (deadline: string) => {
+        if (!deadline) return <Tag>--</Tag>;
 
-        const isCompleted = record.status === 3;
-        const isReviewing = record.status === 2;
+        const d = dayjs(deadline);
+        const now = dayjs();
 
-        const disabled =
-          isCompleted ||
-          (role === 3 && record.status === 1) ||
-          (role === 4 && (isReviewing || isTaskCompletedForReviewer(record)));
+        const isOverdue = d.isBefore(now);
+        const isNear = d.diff(now, "hour") <= 6 && !isOverdue;
 
         return (
-          <Button
-            type="primary"
-            disabled={disabled}
-            onClick={() => goToTask(record)}
-          >
-            {isCompleted || (role === 4 && isTaskCompletedForReviewer(record))
-              ? "Completed"
-              : role === 3
-                ? "Annotate"
-                : "Review"}
-          </Button>
+          <div>
+            <Tag color={isOverdue ? "red" : isNear ? "orange" : "blue"}>
+              {d.format("DD/MM/YYYY HH:mm")}
+            </Tag>
+            <div style={{ fontSize: 12, color: "#999" }}>
+              {isOverdue
+                ? "Overdue"
+                : isNear
+                ? "Due soon"
+                : `${d.diff(now, "day")} days left`}
+            </div>
+          </div>
         );
       },
     },
+{
+  title: "Action",
+  render: (_: any, record: Task) => {
+    let disabled = true;
+    let buttonLabel = "Completed";
+
+    const now = dayjs();
+
+    // ❗ Check deadline trước
+    if (record.deadline && dayjs(record.deadline).isBefore(now)) {
+      return (
+        <Button type="primary" disabled danger>
+          Overdue
+        </Button>
+      );
+    }
+
+    // DONE → cả 2 đều disable
+    if (record.status === 3) {
+      return (
+        <Button type="primary" disabled>
+          Completed
+        </Button>
+      );
+    }
+
+    // Annotator
+    if (role === 3) {
+      if (record.status === 0 || record.status === 2) {
+        disabled = false;
+        buttonLabel = "Annotate";
+      } else {
+        buttonLabel = "Annotating";
+      }
+    }
+
+    // Reviewer
+    if (role === 4) {
+      if (record.status === 1) {
+        disabled = false;
+        buttonLabel = "Review";
+      } else {
+        buttonLabel = "Waiting";
+      }
+    }
+
+    return (
+      <Button
+        type="primary"
+        disabled={disabled}
+        danger={false}
+        onClick={() => goToTask(record)}
+      >
+        {buttonLabel}
+      </Button>
+    );
+  },
+}
   ];
 
   // ================= LOADING =================
@@ -239,46 +261,62 @@ const TasksPage: React.FC = () => {
 
   return (
     <div style={{ padding: 24 }}>
-      {/* TITLE */}
+      {/* HEADER */}
       <Space direction="vertical" style={{ marginBottom: 20 }}>
         <Title level={3}>
           {role === 3 ? "My Annotation Tasks" : "My Review Tasks"}
         </Title>
-        <Text type="secondary">Manage and process your assigned tasks</Text>
+        <Text type="secondary">Manage your tasks by project</Text>
       </Space>
 
-      {/* SEARCH */}
+      {/* FILTER */}
       <Card style={{ marginBottom: 20 }}>
-        <Input
-          placeholder="Search by round name..."
-          prefix={<SearchOutlined />}
-          style={{ width: 300 }}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <Select
-          style={{ width: 180, marginLeft: 12 }}
-          placeholder="Filter by status"
-          allowClear
-          onChange={(value) => loadTasks(search, value)}
-        >
-          <Select.Option value={0}>Pending</Select.Option>
-          <Select.Option value={1}>Annotating</Select.Option>
-          <Select.Option value={2}>Review</Select.Option>
-          <Select.Option value={3}>Done</Select.Option>
-        </Select>
+        <Space>
+          <Input
+            placeholder="Search..."
+            prefix={<SearchOutlined />}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: 250 }}
+          />
+
+          <Select
+            placeholder="Status"
+            allowClear
+            style={{ width: 160 }}
+            onChange={(v) => setStatusFilter(v)}
+          >
+            <Select.Option value={0}>Pending</Select.Option>
+            <Select.Option value={1}>Annotating</Select.Option>
+            <Select.Option value={2}>Review</Select.Option>
+            <Select.Option value={3}>Done</Select.Option>
+          </Select>
+        </Space>
       </Card>
 
-      {/* TABLE */}
-      <Table
-        columns={columns}
-        dataSource={filtered.map((t) => ({
-          ...t,
-          key: t.taskId,
-        }))}
-        bordered
-        pagination={{ pageSize: 6 }}
-      />
+      <Collapse defaultActiveKey={["0"]}>
+        {tasks.map((project, index) => (
+          <Panel
+            key={index}
+            header={
+              <Space>
+                <b>📁 {project.projectName}</b>
+                <Tag color="blue">{project.tasks.length}</Tag>
+              </Space>
+            }
+          >
+            <Table
+              columns={columns}
+              dataSource={project.tasks.map((t) => ({
+                ...t,
+                key: t.taskId,
+              }))}
+              pagination={false}
+              bordered
+            />
+          </Panel>
+        ))}
+      </Collapse>
     </div>
   );
 };
